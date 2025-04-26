@@ -1,16 +1,30 @@
 # work_hours
 
-A new Flutter project.
+> A Flutter application to track work hours.
+
+## Table of Contents
+
+-   [About](#about)
+-   [Getting Started](#getting-started)
+    -   [Prerequisites](#prerequisites)
+    -   [Installation](#installation)
+-   [Usage](#usage)
+-   [Contributing](#contributing)
+-   [License](#license)
+-   [Contact](#contact)
+
+## About
+
+`work_hours` is a Flutter project designed to help users track their work hours. This application provides a starting point for a Flutter application. It is built using the Flutter framework and is intended to be a simple and efficient way to manage work time.
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+### Prerequisites
 
-A few resources to get you started if this is your first Flutter project:
+-   Flutter SDK (latest stable version recommended)
+-   Android Studio or VS Code with Flutter/Dart plugins
+-   Git
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+### Installation
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+1.  Clone the repository:

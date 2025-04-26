@@ -349,6 +349,8 @@ class _SummaryPageState extends State<SummaryPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
+
       appBar: AppBar(
         title: const Text('Summary'),
         actions: [
@@ -378,7 +380,7 @@ class _SummaryPageState extends State<SummaryPage> {
 
                   return SingleChildScrollView(
                     child: Padding(
-                      padding: const EdgeInsets.all(16.0),
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), // Bottom 100
                       child: Column(
                         children: [
                           _buildTodayProgressCard(),

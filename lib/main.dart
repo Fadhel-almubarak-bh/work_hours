@@ -86,7 +86,7 @@ void main() async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
     // Set App Group ID
-    await HomeWidget.setAppGroupId('group.com.example.work_hours'); 
+    await HomeWidget.setAppGroupId('group.com.example.work_hours');
     // Register the INTERACTIVITY callback
     HomeWidget.registerInteractivityCallback(interactiveCallback);
     
@@ -97,14 +97,15 @@ void main() async {
       Hive.openBox('settings'),
     ]);
 
+    runApp(const MyApp());
+
     await _checkInitialPermissions();
     await NotificationService.initialize();
     await NotificationService.scheduleNotifications();
     
     // Initial widget update on app start
-    await HiveDb.updateWidget(); 
+    await HiveDb.updateWidget();
     
-    runApp(const MyApp());
   } catch (e) {
     debugPrint('Error during initialization: $e');
     // Show error UI instead of crashing

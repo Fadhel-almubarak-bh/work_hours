@@ -55,6 +55,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('Settings'),
       ),
@@ -62,7 +63,7 @@ class _SettingsPageState extends State<SettingsPage> {
         valueListenable: HiveDb.getSettingsListenable(),
         builder: (context, Box settings, _) {
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), // Bottom 100
             children: [
               // Dark Mode Switch
               Card(
@@ -230,6 +231,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
               ),
+              SizedBox(height: 20,)
             ],
           );
         },

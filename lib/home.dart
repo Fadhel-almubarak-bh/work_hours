@@ -39,15 +39,18 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
 
   void _getTodayStatus() {
     if (!mounted) return;
-    
+
     final data = HiveDb.getDayEntry(DateTime.now());
 
     if (data != null) {
       final clockInStr = data['in'];
       final clockOutStr = data['out'];
 
-      final parsedClockIn = clockInStr != null ? DateTime.tryParse(clockInStr) : null;
-      final parsedClockOut = clockOutStr != null ? DateTime.tryParse(clockOutStr) : null;
+      final parsedClockIn = clockInStr != null
+          ? DateTime.tryParse(clockInStr)
+          : null;
+      final parsedClockOut = clockOutStr != null ? DateTime.tryParse(
+          clockOutStr) : null;
 
       if (mounted) {
         setState(() {
@@ -138,7 +141,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.toString().contains('before clock in time') 
+          content: Text(e.toString().contains('before clock in time')
               ? 'Error: Clock out time cannot be before clock in time'
               : 'Error clocking out: ${e.toString()}'),
           backgroundColor: Colors.red,
@@ -181,16 +184,14 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
   Widget build(BuildContext context) {
     super.build(context);
 
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Work Hours Tracker'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _getTodayStatus,
-            tooltip: 'Refresh Status',
-          ),
-        ],
+        backgroundColor: colorScheme.primary,
+        foregroundColor: theme.appBarTheme.foregroundColor,
       ),
       body: SafeArea(
         child: Column(
@@ -204,18 +205,20 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                   children: [
                     Text(
                       'Today\'s Status',
-                      style: Theme.of(context).textTheme.titleLarge,
+                      style: theme.textTheme.titleLarge,
                     ),
                     const SizedBox(height: 8),
                     if (clockInTime != null)
                       Text(
-                        'Clocked in at: ${DateFormat.Hm().format(clockInTime!)}',
-                        style: const TextStyle(fontSize: 16),
+                        'Clocked in at: ${DateFormat.Hm().format(
+                            clockInTime!)}',
+                        style: theme.textTheme.bodyMedium,
                       ),
                     if (clockOutTime != null)
                       Text(
-                        'Clocked out at: ${DateFormat.Hm().format(clockOutTime!)}',
-                        style: const TextStyle(fontSize: 16),
+                        'Clocked out at: ${DateFormat.Hm().format(
+                            clockOutTime!)}',
+                        style: theme.textTheme.bodyMedium,
                       ),
                   ],
                 ),
@@ -226,13 +229,15 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
             Card(
               margin: const EdgeInsets.symmetric(horizontal: 16),
               child: ListTile(
-                leading: const Icon(Icons.access_time),
+                leading: Icon(Icons.access_time, color: colorScheme.primary),
                 title: Text(
                   selectedDateTime == null
                       ? 'Current Time'
-                      : DateFormat('yyyy-MM-dd HH:mm').format(selectedDateTime!),
+                      : DateFormat('yyyy-MM-dd HH:mm').format(
+                      selectedDateTime!),
+                  style: theme.textTheme.bodyMedium,
                 ),
-                trailing: const Icon(Icons.edit),
+                trailing: Icon(Icons.edit, color: colorScheme.primary),
                 onTap: _pickDateTime,
               ),
             ),
@@ -258,7 +263,9 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                   const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: (clockInTime != null && clockOutTime == null) ? _clockOut : null,
+                      onPressed: (clockInTime != null && clockOutTime == null)
+                          ? _clockOut
+                          : null,
                       icon: const Icon(Icons.logout),
                       label: const Text('Clock Out'),
                       style: ElevatedButton.styleFrom(
@@ -278,10 +285,11 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: ElevatedButton.icon(
                 onPressed: _markOffDay,
-                icon: const Icon(Icons.event_busy),
+                icon: const Icon(Icons.event_busy, color: Colors.white,),
                 label: const Text('Mark Off Day'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.offDay,
+                  foregroundColor: Colors.white, // Make sure text is readable
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   minimumSize: const Size(double.infinity, 0),
                 ),
