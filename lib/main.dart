@@ -37,6 +37,7 @@ Future<void> interactiveCallback(Uri? uri) async {
       await HiveDb.clockIn(DateTime.now());
       debugPrint('Clocked in via widget callback');
       // Trigger an update AFTER the action
+
       await HiveDb.updateWidget(); 
     } catch (e) {
       debugPrint('Error clocking in via widget callback: $e');
@@ -70,7 +71,6 @@ Future<void> interactiveCallback(Uri? uri) async {
 Future<void> _checkInitialPermissions() async {
   try {
     final permissionsGranted = await PermissionService.checkAndRequestPermissions(
-      // We can't use context here as the app isn't built yet
       // Permissions will be checked again in MainPage
       null,
     );
@@ -85,11 +85,12 @@ Future<void> _checkInitialPermissions() async {
 void main() async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
+
     // Set App Group ID
     await HomeWidget.setAppGroupId('group.com.example.work_hours');
     // Register the INTERACTIVITY callback
-    HomeWidget.registerInteractivityCallback(interactiveCallback);
-    
+    await HomeWidget.registerInteractivityCallback(interactiveCallback);
+
     tz.initializeTimeZones();
     await Hive.initFlutter(); // Ensure this is called before accessing Hive
     await Future.wait([
@@ -99,7 +100,7 @@ void main() async {
 
     runApp(const MyApp());
 
-    await _checkInitialPermissions();
+    // await _checkInitialPermissions();
     await NotificationService.initialize();
     await NotificationService.scheduleNotifications();
     

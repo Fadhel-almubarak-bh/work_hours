@@ -3,6 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart'; // Add if missing
+import 'dart:convert'; // Add this at the top if missing
+import 'dart:io';
+import 'package:excel/excel.dart'; // Add this import
+import 'package:file_picker/file_picker.dart'; // If you plan to import from user file
+import 'package:permission_handler/permission_handler.dart';
 
 // Helper function (can be moved to a utility file if preferred)
 String _formatDurationForWidgetDb(int totalMinutes) {
@@ -32,6 +38,98 @@ class HiveDb {
       rethrow;
     }
   }
+  static Future<void> importDataFromExcel() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+      );
+
+      if (result == null) {
+        debugPrint('⚠️ No file selected.');
+        return;
+      }
+
+      final filePath = result.files.single.path!;
+      final bytes = File(filePath).readAsBytesSync();
+      final excel = Excel.decodeBytes(bytes);
+
+      final sheet = excel.tables['WorkHours'];
+      if (sheet == null) {
+        debugPrint('❌ No "WorkHours" sheet found.');
+        return;
+      }
+
+      for (var i = 1; i < sheet.rows.length; i++) { // Skip header row
+        final row = sheet.rows[i];
+        final dateKey = row[0]?.value.toString(); // First column: date
+
+        if (dateKey != null) {
+          await Hive.box('work_hours').put(dateKey, {
+            'in': row[1]?.value?.toString(), // Clock In
+            'out': row[2]?.value?.toString(), // Clock Out
+            'duration': int.tryParse(row[3]?.value.toString() ?? '0') ?? 0, // Duration
+            'offDay': (row[4]?.value?.toString() ?? '').toLowerCase() == 'yes', // Off Day
+          });
+        }
+      }
+
+      debugPrint('✅ Imported work hours from Excel.');
+    } catch (e) {
+      debugPrint('❌ Error importing from Excel: $e');
+    }
+  }
+
+
+  static Future<void> exportDataToExcel() async {
+    try {
+      final entries = getAllEntries();
+      final excel = Excel.createExcel(); // Creates a new Excel file
+      final sheet = excel['WorkHours']; // Sheet name
+
+      // Add Header
+      sheet.appendRow(['Date', 'Clock In', 'Clock Out', 'Duration (minutes)', 'Off Day']);
+
+      // Add entries
+      entries.forEach((date, entry) {
+        sheet.appendRow([
+          date,
+          entry['in'] ?? '',
+          entry['out'] ?? '',
+          entry['duration'] ?? 0,
+          entry['offDay'] == true ? 'Yes' : 'No',
+        ]);
+      });
+
+      // Let user pick the folder
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+
+      if (selectedDirectory == null) {
+        debugPrint('⚠️ User canceled directory selection.');
+        return;
+      }
+
+      final path = '$selectedDirectory/work_hours_backup.xlsx';
+
+      final fileBytes = excel.encode();
+      final file = File(path);
+
+      if (fileBytes != null) {
+        await file.writeAsBytes(fileBytes);
+        debugPrint('✅ Exported work hours to Excel: $path');
+      } else {
+        debugPrint('⚠️ Failed to generate Excel file.');
+      }
+    } catch (e) {
+      debugPrint('❌ Error exporting to Excel: $e');
+    }
+  }
+
+
+
+
+
+
 
   static Future<void> clockOut(DateTime time, DateTime clockInTime) async {
     try {

@@ -10,6 +10,11 @@ import 'config.dart';
 import 'hive_db.dart';
 import 'notification_service.dart';
 
+import 'dart:convert';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -36,6 +41,34 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
       _getTodayStatus();
     }
   }
+
+  Future<void> _exportDataToExcel() async {
+    try {
+      await HiveDb.exportDataToExcel();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ Excel Export successfully')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Error exporting to Excel: $e')),
+      );
+    }
+  }
+
+  Future<void> _importDataFromExcel() async {
+    try {
+      await HiveDb.importDataFromExcel();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ Excel Import successful')),
+      );
+      setState(() {});
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Error importing Excel: $e')),
+      );
+    }
+  }
+
 
   void _getTodayStatus() {
     if (!mounted) return;
@@ -295,6 +328,41 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                 ),
               ),
             ),
+            SizedBox(height: 50,),
+            // Export and Import Buttons
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _exportDataToExcel,
+                      icon: const Icon(Icons.save_alt, color: Colors.white),
+                      label: const Text('Export'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _importDataFromExcel,
+                      icon: const Icon(Icons.upload_file, color: Colors.white),
+                      label: const Text('Import'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.deepOrange,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           ],
         ),
       ),
