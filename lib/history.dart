@@ -113,7 +113,7 @@ class _HistoryPageState extends State<HistoryPage> {
 
     if (result != null) {
       if (result['isOffDay']) {
-        await HiveDb.markOffDay(result['clockInTime']);
+        await HiveDb.markOffDay(DateFormat('yyyy-MM-dd').parse(key));
       } else {
         if (result['clockInTime'] != null) {
           await HiveDb.clockIn(result['clockInTime']);

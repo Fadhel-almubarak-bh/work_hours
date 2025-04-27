@@ -96,6 +96,7 @@ class _SummaryPageState extends State<SummaryPage> {
   }
 
   void _refreshSummary() {
+    print(HiveDb.getAllEntries());
     setState(() {
       _summaryFuture = _calculateSummary();
     });

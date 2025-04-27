@@ -60,17 +60,46 @@ class HiveDb {
         return;
       }
 
-      for (var i = 1; i < sheet.rows.length; i++) { // Skip header row
+      for (var i = 1; i < sheet.rows.length; i++) {
         final row = sheet.rows[i];
-        final dateKey = row[0]?.value.toString(); // First column: date
+        final rawDate = row[0]?.value.toString();
+
+        String? dateKey;
+        if (rawDate is DateTime) {
+          dateKey = DateFormat('yyyy-MM-dd').format(rawDate as DateTime);
+        } else if (rawDate is String) {
+          final parsed = DateTime.tryParse(rawDate);
+          if (parsed != null) {
+            dateKey = DateFormat('yyyy-MM-dd').format(parsed);
+          } else if (rawDate.length >= 10) {
+            dateKey = rawDate.substring(0, 10); // fallback if already formatted like yyyy-MM-dd
+          }
+        }
+
+        final clockInStr = row[1]?.value?.toString();
+        final clockOutStr = row[2]?.value?.toString();
+
+        int durationMinutes = 0;
+        if (clockInStr != null && clockOutStr != null) {
+          final clockIn = DateTime.tryParse(clockInStr);
+          final clockOut = DateTime.tryParse(clockOutStr);
+          if (clockIn != null && clockOut != null) {
+            durationMinutes = clockOut.difference(clockIn).inMinutes;
+            if (durationMinutes < 0) durationMinutes = 0;
+          }
+        } else {
+          durationMinutes = int.tryParse(row[3]?.value.toString() ?? '0') ?? 0;
+        }
 
         if (dateKey != null) {
           await Hive.box('work_hours').put(dateKey, {
-            'in': row[1]?.value?.toString(), // Clock In
-            'out': row[2]?.value?.toString(), // Clock Out
-            'duration': int.tryParse(row[3]?.value.toString() ?? '0') ?? 0, // Duration
-            'offDay': (row[4]?.value?.toString() ?? '').toLowerCase() == 'yes', // Off Day
+            'in': clockInStr,
+            'out': clockOutStr,
+            'duration': durationMinutes,
+            'offDay': (row[4]?.value?.toString() ?? '').toLowerCase() == 'yes',
           });
+        } else {
+          debugPrint('⚠️ Skipping row $i: could not parse date.');
         }
       }
 
@@ -79,6 +108,7 @@ class HiveDb {
       debugPrint('❌ Error importing from Excel: $e');
     }
   }
+
 
 
   static Future<void> exportDataToExcel() async {
@@ -164,18 +194,23 @@ class HiveDb {
   static Future<void> markOffDay(DateTime date) async {
     try {
       final dateKey = DateFormat('yyyy-MM-dd').format(date);
+      await _workHoursBox.delete(dateKey); // First delete any old entry
+
       await _workHoursBox.put(dateKey, {
         'in': null,
         'out': null,
         'duration': getDailyTargetMinutes(),
         'offDay': true,
       });
+
       await _syncTodayEntry();
+      debugPrint('✅ Marked $dateKey as Off Day.');
     } catch (e) {
       debugPrint('Error in markOffDay: $e');
       rethrow;
     }
   }
+
 
   static Map<String, dynamic>? getDayEntry(DateTime date) {
     try {
