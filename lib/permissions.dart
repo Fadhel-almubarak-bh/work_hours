@@ -57,10 +57,10 @@ class PermissionService {
   }
 
   static void _showPermissionDialog(
-      BuildContext context,
-      String title,
-      String message,
-      ) {
+    BuildContext context,
+    String title,
+    String message,
+  ) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

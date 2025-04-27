@@ -38,6 +38,7 @@ class HiveDb {
       rethrow;
     }
   }
+
   static Future<void> importDataFromExcel() async {
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -72,7 +73,8 @@ class HiveDb {
           if (parsed != null) {
             dateKey = DateFormat('yyyy-MM-dd').format(parsed);
           } else if (rawDate.length >= 10) {
-            dateKey = rawDate.substring(0, 10); // fallback if already formatted like yyyy-MM-dd
+            dateKey = rawDate.substring(
+                0, 10); // fallback if already formatted like yyyy-MM-dd
           }
         }
 
@@ -109,8 +111,6 @@ class HiveDb {
     }
   }
 
-
-
   static Future<void> exportDataToExcel() async {
     try {
       final entries = getAllEntries();
@@ -118,7 +118,8 @@ class HiveDb {
       final sheet = excel['WorkHours']; // Sheet name
 
       // Add Header
-      sheet.appendRow(['Date', 'Clock In', 'Clock Out', 'Duration (minutes)', 'Off Day']);
+      sheet.appendRow(
+          ['Date', 'Clock In', 'Clock Out', 'Duration (minutes)', 'Off Day']);
 
       // Add entries
       entries.forEach((date, entry) {
@@ -154,12 +155,6 @@ class HiveDb {
       debugPrint('❌ Error exporting to Excel: $e');
     }
   }
-
-
-
-
-
-
 
   static Future<void> clockOut(DateTime time, DateTime clockInTime) async {
     try {
@@ -210,7 +205,6 @@ class HiveDb {
       rethrow;
     }
   }
-
 
   static Map<String, dynamic>? getDayEntry(DateTime date) {
     try {
@@ -312,7 +306,8 @@ class HiveDb {
 
   static List<bool> getWorkDays() {
     try {
-      return _settingsBox.get('workDays', defaultValue: List.generate(7, (index) => index < 5));
+      return _settingsBox.get('workDays',
+          defaultValue: List.generate(7, (index) => index < 5));
     } catch (e) {
       debugPrint('Error in getWorkDays: $e');
       return List.generate(7, (index) => index < 5);
@@ -371,7 +366,8 @@ class HiveDb {
   static TimeOfDay getClockOutReminderTime() {
     try {
       final hour = _settingsBox.get('clockOutReminderHour', defaultValue: 17);
-      final minute = _settingsBox.get('clockOutReminderMinute', defaultValue: 0);
+      final minute =
+          _settingsBox.get('clockOutReminderMinute', defaultValue: 0);
       return TimeOfDay(hour: hour, minute: minute);
     } catch (e) {
       debugPrint('Error in getClockOutReminderTime: $e');
@@ -426,20 +422,22 @@ class HiveDb {
     try {
       final now = DateTime.now();
       final todayEntry = getDayEntry(now);
-      
+
       String clockInText = "In: --:--";
       String clockOutText = "Out: --:--";
       bool isClockedIn = false;
-      DateTime? clockInTimeForClockOut; // Store clock-in time if needed for clock-out action
-      
+      DateTime?
+          clockInTimeForClockOut; // Store clock-in time if needed for clock-out action
+
       if (todayEntry != null) {
         final inTimeStr = todayEntry['in'] as String?;
         final outTimeStr = todayEntry['out'] as String?;
-        
+
         if (inTimeStr != null) {
           final inTime = DateTime.parse(inTimeStr);
           clockInText = "In: ${DateFormat.Hm().format(inTime)}";
-          clockInTimeForClockOut = inTime; // Store for potential clock-out action
+          clockInTimeForClockOut =
+              inTime; // Store for potential clock-out action
           isClockedIn = true;
         }
         if (outTimeStr != null) {
@@ -447,30 +445,29 @@ class HiveDb {
           clockOutText = "Out: ${DateFormat.Hm().format(outTime)}";
           isClockedIn = false; // Explicitly set to false if clocked out
         } else if (inTimeStr != null) {
-           // If clocked in but not out
-           clockOutText = "Out: Pending";
-           isClockedIn = true;
+          // If clocked in but not out
+          clockOutText = "Out: Pending";
+          isClockedIn = true;
         }
       }
 
       // Calculate overtime
       final overtimeMinutes = calculateOvertimeUntilYesterday();
-      final overtimeText = "Overtime: ${_formatDurationForWidgetDb(overtimeMinutes)}";
+      final overtimeText =
+          "Overtime: ${_formatDurationForWidgetDb(overtimeMinutes)}";
 
       // Save text data for widget
       await HomeWidget.saveWidgetData<String>('_clockInText', clockInText);
       await HomeWidget.saveWidgetData<String>('_clockOutText', clockOutText);
       await HomeWidget.saveWidgetData<String>('_overtimeText', overtimeText);
-      
+
       // Update the widget (this now implicitly handles click registration via the callback)
       await HomeWidget.updateWidget(
-          name: 'HomeWidgetProvider', 
+          name: 'HomeWidgetProvider',
           androidName: 'HomeWidgetProvider',
-          iOSName: 'HomeWidgetProvider' 
-      );
+          iOSName: 'HomeWidgetProvider');
 
       debugPrint("HomeWidget data saved and update triggered.");
-
     } catch (e) {
       debugPrint('Error syncing today entry for widget: $e');
     }
@@ -500,33 +497,33 @@ class HiveDb {
           debugPrint('Skipping invalid date key: $dateKey');
         }
       }
-      
+
       // Ensure firstDate is not after yesterday
       if (firstDate.isAfter(yesterday)) {
-          return 0; // No entries before today
+        return 0; // No entries before today
       }
 
       int totalWorkedMinutes = 0;
       int totalTargetMinutes = 0;
-      final workDaysSetting = getWorkDays(); // [true, true, true, true, true, false, false]
+      final workDaysSetting =
+          getWorkDays(); // [true, true, true, true, true, false, false]
       final dailyTarget = getDailyTargetMinutes();
 
       // Iterate from the first recorded day up to yesterday
-      for (var day = firstDate; 
-           day.isBefore(yesterday) || day.isAtSameMomentAs(yesterday); 
-           day = day.add(const Duration(days: 1))) {
-        
+      for (var day = firstDate;
+          day.isBefore(yesterday) || day.isAtSameMomentAs(yesterday);
+          day = day.add(const Duration(days: 1))) {
         final dateKey = DateFormat('yyyy-MM-dd').format(day);
         final entry = allEntries[dateKey];
-        
+
         // Check if it was a configured work day (adjusting for DateTime.weekday: Mon=1, Sun=7)
         int weekdayIndex = day.weekday - 1; // 0=Mon, 6=Sun
         bool isWorkDay = workDaysSetting[weekdayIndex];
 
         if (isWorkDay) {
-            totalTargetMinutes += dailyTarget;
+          totalTargetMinutes += dailyTarget;
         }
-        
+
         if (entry != null) {
           final duration = entry['duration'] as num?;
           final isOffDay = entry['offDay'] as bool? ?? false;
@@ -534,17 +531,17 @@ class HiveDb {
           if (isOffDay) {
             // If marked as off-day, count it as meeting the target for that day
             // Note: This assumes off-days count towards target, adjust if needed
-             if (!isWorkDay) { 
-                // If it wasn't a configured workday but marked as off, don't add worked time
-             } else {
-                 totalWorkedMinutes += dailyTarget; 
-             }
+            if (!isWorkDay) {
+              // If it wasn't a configured workday but marked as off, don't add worked time
+            } else {
+              totalWorkedMinutes += dailyTarget;
+            }
           } else if (duration != null) {
             totalWorkedMinutes += duration.toInt();
           }
         } else {
-           // If no entry exists for a configured work day, assume 0 worked minutes for that day
-           // Target minutes are already added above if it's a workday
+          // If no entry exists for a configured work day, assume 0 worked minutes for that day
+          // Target minutes are already added above if it's a workday
         }
       }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:intl/intl.dart';
+import 'package:work_hours/theme_extensions.dart';
 import 'config.dart';
 import 'hive_db.dart';
 
@@ -20,6 +21,7 @@ class _HistoryPageState extends State<HistoryPage> {
     return '${hours}h ${minutes}m';
   }
 
+
   String _getEntryDescription(Map<dynamic, dynamic> data) {
     if (data['offDay'] == true) {
       return 'Off Day - ${_formatDuration(data['duration'])}';
@@ -34,7 +36,8 @@ class _HistoryPageState extends State<HistoryPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete All Entries'),
-        content: const Text('Are you sure you want to delete all entries? This action cannot be undone.'),
+        content: const Text(
+            'Are you sure you want to delete all entries? This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -130,13 +133,14 @@ class _HistoryPageState extends State<HistoryPage> {
     }
   }
 
-  Map<String, List<MapEntry<String, dynamic>>> _groupEntriesByMonth(Map<dynamic, dynamic> entries) {
+  Map<String, List<MapEntry<String, dynamic>>> _groupEntriesByMonth(
+      Map<dynamic, dynamic> entries) {
     final groupedEntries = <String, List<MapEntry<String, dynamic>>>{};
-    
+
     for (final entry in entries.entries) {
       final date = DateTime.parse(entry.key.toString());
       final monthKey = DateFormat('yyyy-MM').format(date);
-      
+
       if (!groupedEntries.containsKey(monthKey)) {
         groupedEntries[monthKey] = [];
       }
@@ -156,9 +160,13 @@ class _HistoryPageState extends State<HistoryPage> {
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('History'),
+        title: Text('History', style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: context.customColors.infoDark
+        ),),
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_sweep),
@@ -180,16 +188,19 @@ class _HistoryPageState extends State<HistoryPage> {
           }
 
           return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
             itemCount: groupedEntries.length,
             itemBuilder: (context, index) {
               final monthKey = groupedEntries.keys.elementAt(index);
               final monthEntries = groupedEntries[monthKey]!;
               final monthDate = DateTime.parse(monthKey + '-01');
-              
+
               return ExpansionTile(
                 title: Text(
                   DateFormat('MMMM yyyy').format(monthDate),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 children: monthEntries.map((entry) {
                   final date = DateTime.parse(entry.key);
@@ -199,23 +210,33 @@ class _HistoryPageState extends State<HistoryPage> {
                   final duration = data['duration'] as num?;
                   final isOffDay = data['offDay'] as bool? ?? false;
 
-                  final clockInTime = clockInStr != null ? DateTime.parse(clockInStr) : null;
-                  final clockOutTime = clockOutStr != null ? DateTime.parse(clockOutStr) : null;
+                  final clockInTime =
+                      clockInStr != null ? DateTime.parse(clockInStr) : null;
+                  final clockOutTime =
+                      clockOutStr != null ? DateTime.parse(clockOutStr) : null;
 
                   return ListTile(
-                    title: Text(DateFormat('EEEE, MMMM d').format(date)),
+                    title: Text(DateFormat('EEEE, MMMM d').format(date),style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (isOffDay)
-                          const Text('Off Day', style: TextStyle(color: Colors.blue))
+                          Text('Off Day',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.bold,color: context.customColors.offDay,
+                            ),)
                         else ...[
                           if (clockInTime != null)
-                            Text('Clock In: ${DateFormat.Hm().format(clockInTime)}'),
+                            Text(
+                                'Clock In: ${DateFormat.Hm().format(clockInTime)}'),
                           if (clockOutTime != null)
-                            Text('Clock Out: ${DateFormat.Hm().format(clockOutTime)}'),
+                            Text(
+                                'Clock Out: ${DateFormat.Hm().format(clockOutTime)}'),
                           if (duration != null)
-                            Text('Duration: ${duration.toInt() ~/ 60}h ${duration.toInt() % 60}m'),
+                            Text(
+                                'Duration: ${duration.toInt() ~/ 60}h ${duration.toInt() % 60}m'),
                         ],
                       ],
                     ),
@@ -279,7 +300,9 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
   Future<void> _pickDateTime(bool isClockIn) async {
     final date = await showDatePicker(
       context: context,
-      initialDate: isClockIn ? (_clockInTime ?? DateTime.now()) : (_clockOutTime ?? DateTime.now()),
+      initialDate: isClockIn
+          ? (_clockInTime ?? DateTime.now())
+          : (_clockOutTime ?? DateTime.now()),
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
@@ -289,7 +312,9 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(
-        isClockIn ? (_clockInTime ?? DateTime.now()) : (_clockOutTime ?? DateTime.now()),
+        isClockIn
+            ? (_clockInTime ?? DateTime.now())
+            : (_clockOutTime ?? DateTime.now()),
       ),
     );
 
@@ -339,17 +364,17 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
           if (!_isOffDay) ...[
             ListTile(
               title: const Text('Clock In'),
-              subtitle: Text(_clockInTime != null 
-                ? DateFormat('yyyy-MM-dd HH:mm').format(_clockInTime!)
-                : 'Not set'),
+              subtitle: Text(_clockInTime != null
+                  ? DateFormat('yyyy-MM-dd HH:mm').format(_clockInTime!)
+                  : 'Not set'),
               trailing: const Icon(Icons.edit),
               onTap: () => _pickDateTime(true),
             ),
             ListTile(
               title: const Text('Clock Out'),
-              subtitle: Text(_clockOutTime != null 
-                ? DateFormat('yyyy-MM-dd HH:mm').format(_clockOutTime!)
-                : 'Not set'),
+              subtitle: Text(_clockOutTime != null
+                  ? DateFormat('yyyy-MM-dd HH:mm').format(_clockOutTime!)
+                  : 'Not set'),
               trailing: const Icon(Icons.edit),
               onTap: () => _pickDateTime(false),
             ),

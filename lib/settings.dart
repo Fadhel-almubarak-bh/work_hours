@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'config.dart';
 import 'hive_db.dart';
 import 'notification_service.dart';
 
@@ -100,7 +98,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                 value: workDays[i],
                                 onChanged: (value) {
                                   if (value != null) {
-                                    final newWorkDays = List<bool>.from(workDays);
+                                    final newWorkDays =
+                                        List<bool>.from(workDays);
                                     newWorkDays[i] = value;
                                     HiveDb.setWorkDays(newWorkDays);
                                   }
@@ -231,7 +230,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
               ),
-              SizedBox(height: 20,)
+              const SizedBox(
+                height: 20,
+              )
             ],
           );
         },

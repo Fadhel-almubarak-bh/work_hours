@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:intl/intl.dart';
 import 'config.dart';
 import 'hive_db.dart';
 
@@ -28,17 +27,17 @@ class _SummaryPageState extends State<SummaryPage> {
     try {
       final now = DateTime.now();
       // Calculate week start (Saturday) by going back to the previous Saturday
-      final weekStart = now.subtract(Duration(days: (now.weekday + 1) % 7)); // Saturday
+      final weekStart =
+          now.subtract(Duration(days: (now.weekday + 1) % 7)); // Saturday
       final monthStart = DateTime(now.year, now.month, 1);
       final lastMonthStart = DateTime(now.year, now.month - 1, 1);
       final lastMonthEnd = DateTime(now.year, now.month, 0);
-      final yesterday = now.subtract(const Duration(days: 1));
 
       // Get today's entry to calculate current progress
       final todayEntry = HiveDb.getDayEntry(now);
       int todayMinutes = 0;
       bool isCurrentlyClockedIn = false;
-      
+
       if (todayEntry != null) {
         if (todayEntry['offDay'] == true) {
           todayMinutes = HiveDb.getDailyTargetMinutes();
@@ -55,13 +54,18 @@ class _SummaryPageState extends State<SummaryPage> {
       }
 
       // Get stats excluding today
-      final weekStats = HiveDb.getStatsForRange(weekStart, now.subtract(const Duration(days: 1)));
-      final monthStats = HiveDb.getStatsForRange(monthStart, now.subtract(const Duration(days: 1)));
-      final lastMonthStats = HiveDb.getStatsForRange(lastMonthStart, lastMonthEnd);
+      final weekStats = HiveDb.getStatsForRange(
+          weekStart, now.subtract(const Duration(days: 1)));
+      final monthStats = HiveDb.getStatsForRange(
+          monthStart, now.subtract(const Duration(days: 1)));
+      final lastMonthStats =
+          HiveDb.getStatsForRange(lastMonthStart, lastMonthEnd);
 
       // Calculate monthly total including today if checked out
       int monthlyTotal = (monthStats['totalMinutes'] as num).toInt();
-      if (!isCurrentlyClockedIn && todayEntry != null && todayEntry['out'] != null) {
+      if (!isCurrentlyClockedIn &&
+          todayEntry != null &&
+          todayEntry['out'] != null) {
         if (todayEntry['offDay'] == true) {
           monthlyTotal += HiveDb.getDailyTargetMinutes();
         } else if (todayEntry['duration'] != null) {
@@ -70,19 +74,25 @@ class _SummaryPageState extends State<SummaryPage> {
       }
 
       // Calculate overtime for completed days only (up to yesterday)
-      final overtimeMinutesUntilYesterday = HiveDb.calculateOvertimeUntilYesterday();
+      final overtimeMinutesUntilYesterday =
+          HiveDb.calculateOvertimeUntilYesterday();
 
       // Calculate weekly and monthly totals separately
-      final weeklyTotal = (weekStats['totalMinutes'] as num).toInt() + (isCurrentlyClockedIn ? 0 : todayMinutes);
+      final weeklyTotal = (weekStats['totalMinutes'] as num).toInt() +
+          (isCurrentlyClockedIn ? 0 : todayMinutes);
 
       return {
         'weeklyTotal': weeklyTotal,
         'monthlyTotal': monthlyTotal,
         'lastMonthTotal': (lastMonthStats['totalMinutes'] as num).toInt(),
-        'weeklyWorkDays': (weekStats['workDays'] as num).toInt() + (isCurrentlyClockedIn ? 0 : (todayMinutes > 0 ? 1 : 0)),
+        'weeklyWorkDays': (weekStats['workDays'] as num).toInt() +
+            (isCurrentlyClockedIn ? 0 : (todayMinutes > 0 ? 1 : 0)),
         'monthlyWorkDays': (monthStats['workDays'] as num).toInt(),
         'lastMonthWorkDays': (lastMonthStats['workDays'] as num).toInt(),
-        'weeklyOffDays': (weekStats['offDays'] as num).toInt() + (isCurrentlyClockedIn ? 0 : (todayEntry?['offDay'] == true ? 1 : 0)),
+        'weeklyOffDays': (weekStats['offDays'] as num).toInt() +
+            (isCurrentlyClockedIn
+                ? 0
+                : (todayEntry?['offDay'] == true ? 1 : 0)),
         'monthlyOffDays': (monthStats['offDays'] as num).toInt(),
         'lastMonthOffDays': (lastMonthStats['offDays'] as num).toInt(),
         'overtimeMinutes': overtimeMinutesUntilYesterday,
@@ -96,7 +106,6 @@ class _SummaryPageState extends State<SummaryPage> {
   }
 
   void _refreshSummary() {
-    print(HiveDb.getAllEntries());
     setState(() {
       _summaryFuture = _calculateSummary();
     });
@@ -118,7 +127,7 @@ class _SummaryPageState extends State<SummaryPage> {
             final now = DateTime.now();
             final todayEntry = HiveDb.getDayEntry(now);
             final dailyTargetMinutes = HiveDb.getDailyTargetMinutes();
-            
+
             int todayMinutes = 0;
             bool isTodayOffDay = false;
 
@@ -129,7 +138,7 @@ class _SummaryPageState extends State<SummaryPage> {
               } else if (todayEntry['duration'] != null) {
                 todayMinutes = (todayEntry['duration'] as num).toInt();
               }
-              
+
               // If clocked in but not out, calculate current duration
               if (todayEntry['in'] != null && todayEntry['out'] == null) {
                 final clockInTime = DateTime.parse(todayEntry['in']);
@@ -138,8 +147,10 @@ class _SummaryPageState extends State<SummaryPage> {
               }
             }
 
-            final progress = (todayMinutes / dailyTargetMinutes).clamp(0.0, 1.0);
-            final remaining = (dailyTargetMinutes - todayMinutes).clamp(0, dailyTargetMinutes);
+            final progress =
+                (todayMinutes / dailyTargetMinutes).clamp(0.0, 1.0);
+            final remaining = (dailyTargetMinutes - todayMinutes)
+                .clamp(0, dailyTargetMinutes);
             final isComplete = todayMinutes >= dailyTargetMinutes;
 
             return Card(
@@ -169,8 +180,11 @@ class _SummaryPageState extends State<SummaryPage> {
                       value: progress,
                       backgroundColor: Colors.grey[200],
                       valueColor: AlwaysStoppedAnimation<Color>(
-                        isTodayOffDay ? Colors.blue :
-                        isComplete ? Colors.green : AppColors.primaryLight,
+                        isTodayOffDay
+                            ? Colors.blue
+                            : isComplete
+                                ? Colors.green
+                                : AppColors.primaryLight,
                       ),
                       minHeight: 10,
                     ),
@@ -183,8 +197,11 @@ class _SummaryPageState extends State<SummaryPage> {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: isTodayOffDay ? Colors.blue :
-                                   isComplete ? Colors.green : AppColors.primaryLight,
+                            color: isTodayOffDay
+                                ? Colors.blue
+                                : isComplete
+                                    ? Colors.green
+                                    : AppColors.primaryLight,
                           ),
                         ),
                         Text(
@@ -237,28 +254,30 @@ class _SummaryPageState extends State<SummaryPage> {
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            if (showTarget) LinearProgressIndicator(
-              value: progress,
-              backgroundColor: Colors.grey[200],
-              valueColor: AlwaysStoppedAnimation<Color>(color),
-              minHeight: 10,
-            ),
+            if (showTarget)
+              LinearProgressIndicator(
+                value: progress,
+                backgroundColor: Colors.grey[200],
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+                minHeight: 10,
+              ),
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                if (showTarget) Text(
-                  '${(progress * 100).toStringAsFixed(1)}%',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: color,
+                if (showTarget)
+                  Text(
+                    '${(progress * 100).toStringAsFixed(1)}%',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
                   ),
-                ),
                 Text(
-                  showTarget 
-                    ? '${formatDuration(current)} / ${formatDuration(target)}'
-                    : formatDuration(current),
+                  showTarget
+                      ? '${formatDuration(current)} / ${formatDuration(target)}'
+                      : formatDuration(current),
                   style: const TextStyle(fontSize: 16),
                 ),
               ],
@@ -280,13 +299,14 @@ class _SummaryPageState extends State<SummaryPage> {
                     ),
                   ],
                 ),
-                if (showTarget) Text(
-                  'Remaining: ${formatDuration(remaining)}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.redAccent,
+                if (showTarget)
+                  Text(
+                    'Remaining: ${formatDuration(remaining)}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.redAccent,
+                    ),
                   ),
-                ),
               ],
             ),
           ],
@@ -316,8 +336,8 @@ class _SummaryPageState extends State<SummaryPage> {
                 Text(
                   'Overtime',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: overtimeMinutes >= 0 ? Colors.green : Colors.red,
-                  ),
+                        color: overtimeMinutes >= 0 ? Colors.green : Colors.red,
+                      ),
                 ),
                 Text(
                   formatDuration(overtimeMinutes.abs()),
@@ -351,7 +371,6 @@ class _SummaryPageState extends State<SummaryPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       resizeToAvoidBottomInset: true,
-
       appBar: AppBar(
         title: const Text('Summary'),
         actions: [
@@ -381,7 +400,8 @@ class _SummaryPageState extends State<SummaryPage> {
 
                   return SingleChildScrollView(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), // Bottom 100
+                      padding: const EdgeInsets.fromLTRB(
+                          16, 16, 16, 100), // Bottom 100
                       child: Column(
                         children: [
                           _buildTodayProgressCard(),
@@ -390,28 +410,44 @@ class _SummaryPageState extends State<SummaryPage> {
                           const SizedBox(height: 24),
                           _buildProgressCard(
                             title: 'Weekly Progress',
-                            current: (summary['weeklyTotal'] as num?)?.toInt() ?? 0,
+                            current:
+                                (summary['weeklyTotal'] as num?)?.toInt() ?? 0,
                             target: weeklyTarget,
-                            workDays: (summary['weeklyWorkDays'] as num?)?.toInt() ?? 0,
-                            offDays: (summary['weeklyOffDays'] as num?)?.toInt() ?? 0,
+                            workDays:
+                                (summary['weeklyWorkDays'] as num?)?.toInt() ??
+                                    0,
+                            offDays:
+                                (summary['weeklyOffDays'] as num?)?.toInt() ??
+                                    0,
                             color: AppColors.primaryLight,
                           ),
                           const SizedBox(height: 24),
                           _buildProgressCard(
                             title: 'Monthly Progress',
-                            current: (summary['monthlyTotal'] as num?)?.toInt() ?? 0,
+                            current:
+                                (summary['monthlyTotal'] as num?)?.toInt() ?? 0,
                             target: monthlyTarget,
-                            workDays: (summary['monthlyWorkDays'] as num?)?.toInt() ?? 0,
-                            offDays: (summary['monthlyOffDays'] as num?)?.toInt() ?? 0,
+                            workDays:
+                                (summary['monthlyWorkDays'] as num?)?.toInt() ??
+                                    0,
+                            offDays:
+                                (summary['monthlyOffDays'] as num?)?.toInt() ??
+                                    0,
                             color: AppColors.secondaryLight,
                           ),
                           const SizedBox(height: 24),
                           _buildProgressCard(
                             title: 'Last Month Summary',
-                            current: (summary['lastMonthTotal'] as num?)?.toInt() ?? 0,
+                            current:
+                                (summary['lastMonthTotal'] as num?)?.toInt() ??
+                                    0,
                             target: monthlyTarget,
-                            workDays: (summary['lastMonthWorkDays'] as num?)?.toInt() ?? 0,
-                            offDays: (summary['lastMonthOffDays'] as num?)?.toInt() ?? 0,
+                            workDays: (summary['lastMonthWorkDays'] as num?)
+                                    ?.toInt() ??
+                                0,
+                            offDays: (summary['lastMonthOffDays'] as num?)
+                                    ?.toInt() ??
+                                0,
                             color: AppColors.infoLight,
                             showTarget: false,
                           ),

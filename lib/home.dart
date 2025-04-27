@@ -14,7 +14,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
-
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -22,7 +21,8 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin {
+class _HomePageState extends State<HomePage>
+    with AutomaticKeepAliveClientMixin {
   DateTime? clockInTime;
   DateTime? clockOutTime;
   DateTime? selectedDateTime;
@@ -69,7 +69,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     }
   }
 
-
   void _getTodayStatus() {
     if (!mounted) return;
 
@@ -79,11 +78,10 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
       final clockInStr = data['in'];
       final clockOutStr = data['out'];
 
-      final parsedClockIn = clockInStr != null
-          ? DateTime.tryParse(clockInStr)
-          : null;
-      final parsedClockOut = clockOutStr != null ? DateTime.tryParse(
-          clockOutStr) : null;
+      final parsedClockIn =
+          clockInStr != null ? DateTime.tryParse(clockInStr) : null;
+      final parsedClockOut =
+          clockOutStr != null ? DateTime.tryParse(clockOutStr) : null;
 
       if (mounted) {
         setState(() {
@@ -227,7 +225,8 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
         foregroundColor: theme.appBarTheme.foregroundColor,
       ),
       body: SafeArea(
-        child: Column(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
           children: [
             // Status Card
             Card(
@@ -243,14 +242,12 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                     const SizedBox(height: 8),
                     if (clockInTime != null)
                       Text(
-                        'Clocked in at: ${DateFormat.Hm().format(
-                            clockInTime!)}',
+                        'Clocked in at: ${DateFormat.Hm().format(clockInTime!)}',
                         style: theme.textTheme.bodyMedium,
                       ),
                     if (clockOutTime != null)
                       Text(
-                        'Clocked out at: ${DateFormat.Hm().format(
-                            clockOutTime!)}',
+                        'Clocked out at: ${DateFormat.Hm().format(clockOutTime!)}',
                         style: theme.textTheme.bodyMedium,
                       ),
                   ],
@@ -266,8 +263,8 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                 title: Text(
                   selectedDateTime == null
                       ? 'Current Time'
-                      : DateFormat('yyyy-MM-dd HH:mm').format(
-                      selectedDateTime!),
+                      : DateFormat('yyyy-MM-dd HH:mm')
+                          .format(selectedDateTime!),
                   style: theme.textTheme.bodyMedium,
                 ),
                 trailing: Icon(Icons.edit, color: colorScheme.primary),
@@ -318,7 +315,10 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: ElevatedButton.icon(
                 onPressed: _markOffDay,
-                icon: const Icon(Icons.event_busy, color: Colors.white,),
+                icon: const Icon(
+                  Icons.event_busy,
+                  color: Colors.white,
+                ),
                 label: const Text('Mark Off Day'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.offDay,
@@ -328,7 +328,9 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                 ),
               ),
             ),
-            SizedBox(height: 50,),
+            SizedBox(
+              height: 50,
+            ),
             // Export and Import Buttons
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -340,7 +342,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                       icon: const Icon(Icons.save_alt, color: Colors.white),
                       label: const Text('Export'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
+                        backgroundColor: AppColors.export,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
@@ -353,7 +355,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                       icon: const Icon(Icons.upload_file, color: Colors.white),
                       label: const Text('Import'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.deepOrange,
+                        backgroundColor: AppColors.import,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
@@ -362,7 +364,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                 ],
               ),
             ),
-
           ],
         ),
       ),

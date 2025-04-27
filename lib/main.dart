@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:home_widget/home_widget.dart';
-import 'package:intl/intl.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'config.dart';
 import 'home.dart';
@@ -13,18 +12,13 @@ import 'permissions.dart';
 import 'notification_service.dart';
 
 // Function to format duration for the widget
-String _formatDurationForWidget(int totalMinutes) {
-  final hours = totalMinutes ~/ 60;
-  final minutes = totalMinutes % 60;
-  return '${hours}h ${minutes}m';
-}
 
 // Renamed callback for clarity with interactivity
 @pragma('vm:entry-point')
 Future<void> interactiveCallback(Uri? uri) async {
   if (uri == null) return;
 
-  debugPrint('Interactive callback received URI: ${uri}');
+  debugPrint('Interactive callback received URI: $uri');
 
   // Handle widget actions based on the URI host
   if (uri.host == 'clock_in') {
@@ -33,52 +27,39 @@ Future<void> interactiveCallback(Uri? uri) async {
       await Hive.initFlutter(); // Might need path_provider setup for background
       await Hive.openBox('work_hours');
       await Hive.openBox('settings');
-      
+
       await HiveDb.clockIn(DateTime.now());
       debugPrint('Clocked in via widget callback');
       // Trigger an update AFTER the action
 
-      await HiveDb.updateWidget(); 
+      await HiveDb.updateWidget();
     } catch (e) {
       debugPrint('Error clocking in via widget callback: $e');
     }
   } else if (uri.host == 'clock_out') {
     try {
       // Ensure Hive is initialized
-      await Hive.initFlutter(); 
+      await Hive.initFlutter();
       await Hive.openBox('work_hours');
       await Hive.openBox('settings');
-      
+
       final now = DateTime.now();
       final todayEntry = HiveDb.getDayEntry(now);
-      if (todayEntry != null && todayEntry['in'] != null && todayEntry['out'] == null) {
+      if (todayEntry != null &&
+          todayEntry['in'] != null &&
+          todayEntry['out'] == null) {
         final clockInTime = DateTime.parse(todayEntry['in'] as String);
         await HiveDb.clockOut(now, clockInTime);
         debugPrint('Clocked out via widget callback');
         // Trigger an update AFTER the action
-        await HiveDb.updateWidget(); 
+        await HiveDb.updateWidget();
       } else {
-        debugPrint('Cannot clock out via widget callback: Not clocked in or already clocked out.');
+        debugPrint(
+            'Cannot clock out via widget callback: Not clocked in or already clocked out.');
       }
     } catch (e) {
       debugPrint('Error clocking out via widget callback: $e');
     }
-  }
-  // Potentially handle the updatewidget host if needed for simple refresh?
-  // else if (uri.host == 'updatewidget') { ... }
-}
-
-Future<void> _checkInitialPermissions() async {
-  try {
-    final permissionsGranted = await PermissionService.checkAndRequestPermissions(
-      // Permissions will be checked again in MainPage
-      null,
-    );
-    if (!permissionsGranted) {
-      debugPrint('Some permissions were not granted during initialization');
-    }
-  } catch (e) {
-    debugPrint('Error checking permissions: $e');
   }
 }
 
@@ -103,10 +84,9 @@ void main() async {
     // await _checkInitialPermissions();
     await NotificationService.initialize();
     await NotificationService.scheduleNotifications();
-    
+
     // Initial widget update on app start
     await HiveDb.updateWidget();
-    
   } catch (e) {
     debugPrint('Error during initialization: $e');
     // Show error UI instead of crashing
@@ -151,7 +131,6 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   int _selectedIndex = 0;
-  bool _isDarkMode = false;
   final List<Widget> _pages = [
     const HomePage(),
     const HistoryPage(),
@@ -168,11 +147,13 @@ class _MainPageState extends State<MainPage> {
   Future<void> _checkPermissions() async {
     if (!mounted) return;
 
-    final permissionsGranted = await PermissionService.checkAndRequestPermissions(context);
+    final permissionsGranted =
+        await PermissionService.checkAndRequestPermissions(context);
     if (!permissionsGranted && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Some features may not work without the required permissions.'),
+          content: Text(
+              'Some features may not work without the required permissions.'),
           duration: Duration(seconds: 3),
         ),
       );
@@ -185,12 +166,6 @@ class _MainPageState extends State<MainPage> {
         _pages[2] = SummaryPage(key: UniqueKey());
       }
       _selectedIndex = index;
-    });
-  }
-
-  void _toggleTheme() {
-    setState(() {
-      _isDarkMode = !_isDarkMode;
     });
   }
 
@@ -212,10 +187,14 @@ class _MainPageState extends State<MainPage> {
               onTap: _onItemTapped,
               type: BottomNavigationBarType.fixed,
               items: const [
-                BottomNavigationBarItem(icon: Icon(Icons.access_time), label: 'Home'),
-                BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
-                BottomNavigationBarItem(icon: Icon(Icons.assessment), label: 'Summary'),
-                BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
+                BottomNavigationBarItem(
+                    icon: Icon(Icons.access_time), label: 'Home'),
+                BottomNavigationBarItem(
+                    icon: Icon(Icons.history), label: 'History'),
+                BottomNavigationBarItem(
+                    icon: Icon(Icons.assessment), label: 'Summary'),
+                BottomNavigationBarItem(
+                    icon: Icon(Icons.settings), label: 'Settings'),
               ],
             ),
           ),
