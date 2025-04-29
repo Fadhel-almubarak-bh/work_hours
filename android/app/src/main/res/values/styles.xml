@@ -15,4 +15,13 @@
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
+
+        <style name="WidgetPopupTheme" parent="Theme.AppCompat.DayNight.Dialog">
+            <item name="android:windowMinWidthMajor">90%</item>
+            <item name="android:windowMinWidthMinor">90%</item>
+            <item name="android:backgroundDimEnabled">false</item>
+            <item name="android:colorBackground">@android:color/holo_blue_dark</item>
+        </style>
+
+
 </resources>

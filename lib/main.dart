@@ -67,10 +67,14 @@ void main() async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
 
+
     // Set App Group ID
     await HomeWidget.setAppGroupId('group.com.example.work_hours');
     // Register the INTERACTIVITY callback
     await HomeWidget.registerInteractivityCallback(interactiveCallback);
+
+    HomeWidget.updateWidget(name: 'MyHomeWidgetProvider');
+
 
     tz.initializeTimeZones();
     await Hive.initFlutter(); // Ensure this is called before accessing Hive
