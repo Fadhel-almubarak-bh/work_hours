@@ -41,29 +41,48 @@ class HiveDb {
 
   static Future<void> importDataFromExcel() async {
     try {
+      debugPrint('[EXCEL_IMPORT] Starting Excel import process...');
+      
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx'],
       );
 
       if (result == null) {
-        debugPrint('⚠️ No file selected.');
+        debugPrint('[EXCEL_IMPORT] ⚠️ No file selected.');
         return;
       }
 
+      debugPrint('[EXCEL_IMPORT] Selected file: ${result.files.single.path}');
       final filePath = result.files.single.path!;
       final bytes = File(filePath).readAsBytesSync();
+      debugPrint('[EXCEL_IMPORT] File read successfully, size: ${bytes.length} bytes');
+      
       final excel = Excel.decodeBytes(bytes);
+      debugPrint('[EXCEL_IMPORT] Excel file decoded successfully');
 
       final sheet = excel.tables['WorkHours'];
       if (sheet == null) {
-        debugPrint('❌ No "WorkHours" sheet found.');
+        debugPrint('[EXCEL_IMPORT] ❌ No "WorkHours" sheet found. Available sheets: ${excel.tables.keys.join(', ')}');
         return;
       }
 
+      debugPrint('[EXCEL_IMPORT] Found WorkHours sheet with ${sheet.rows.length} rows');
+      
+      // Print header row for verification
+      if (sheet.rows.isNotEmpty) {
+        debugPrint('[EXCEL_IMPORT] Header row: ${sheet.rows[0].map((cell) => cell?.value?.toString() ?? 'null').join(', ')}');
+      }
+
+      int importedCount = 0;
+      int skippedCount = 0;
+
       for (var i = 1; i < sheet.rows.length; i++) {
         final row = sheet.rows[i];
+        debugPrint('[EXCEL_IMPORT] Processing row $i: ${row.map((cell) => cell?.value?.toString() ?? 'null').join(', ')}');
+        
         final rawDate = row[0]?.value.toString();
+        debugPrint('[EXCEL_IMPORT] Raw date value: $rawDate');
 
         String? dateKey;
         if (rawDate is DateTime) {
@@ -73,41 +92,66 @@ class HiveDb {
           if (parsed != null) {
             dateKey = DateFormat('yyyy-MM-dd').format(parsed);
           } else if (rawDate.length >= 10) {
-            dateKey = rawDate.substring(
-                0, 10); // fallback if already formatted like yyyy-MM-dd
+            dateKey = rawDate.substring(0, 10);
           }
         }
+
+        debugPrint('[EXCEL_IMPORT] Processed date key: $dateKey');
 
         final clockInStr = row[1]?.value?.toString();
         final clockOutStr = row[2]?.value?.toString();
+        final offDayStr = (row[4]?.value?.toString() ?? '').toLowerCase();
+        // Only try to access description if the row has enough columns
+        final descriptionStr = row.length > 5 ? row[5]?.value?.toString() : null;
 
-        int durationMinutes = 0;
-        if (clockInStr != null && clockOutStr != null) {
-          final clockIn = DateTime.tryParse(clockInStr);
-          final clockOut = DateTime.tryParse(clockOutStr);
-          if (clockIn != null && clockOut != null) {
-            durationMinutes = clockOut.difference(clockIn).inMinutes;
-            if (durationMinutes < 0) durationMinutes = 0;
-          }
-        } else {
-          durationMinutes = int.tryParse(row[3]?.value.toString() ?? '0') ?? 0;
-        }
+        debugPrint('[EXCEL_IMPORT] Row values - Clock In: $clockInStr, Clock Out: $clockOutStr, Off Day: $offDayStr, Description: $descriptionStr');
+
+        bool isOffDay = offDayStr == 'yes' || offDayStr == 'true' || offDayStr == '1';
+        String? description = isOffDay ? (descriptionStr ?? 'Regular Off Day') : null;
 
         if (dateKey != null) {
-          await Hive.box('work_hours').put(dateKey, {
-            'in': clockInStr,
-            'out': clockOutStr,
-            'duration': durationMinutes,
-            'offDay': (row[4]?.value?.toString() ?? '').toLowerCase() == 'yes',
-          });
+          if (isOffDay) {
+            debugPrint('[EXCEL_IMPORT] Importing off day for $dateKey with description: $description');
+            await Hive.box('work_hours').put(dateKey, {
+              'in': null,
+              'out': null,
+              'duration': getDailyTargetMinutes(),
+              'offDay': true,
+              'description': description,
+            });
+            importedCount++;
+          } else {
+            int durationMinutes = 0;
+            if (clockInStr != null && clockOutStr != null) {
+              final clockIn = DateTime.tryParse(clockInStr);
+              final clockOut = DateTime.tryParse(clockOutStr);
+              if (clockIn != null && clockOut != null) {
+                durationMinutes = clockOut.difference(clockIn).inMinutes;
+                if (durationMinutes < 0) durationMinutes = 0;
+              }
+            } else {
+              durationMinutes = int.tryParse(row[3]?.value.toString() ?? '0') ?? 0;
+            }
+
+            debugPrint('[EXCEL_IMPORT] Importing work day for $dateKey with duration: $durationMinutes minutes');
+            await Hive.box('work_hours').put(dateKey, {
+              'in': clockInStr,
+              'out': clockOutStr,
+              'duration': durationMinutes,
+              'offDay': false,
+            });
+            importedCount++;
+          }
         } else {
-          debugPrint('⚠️ Skipping row $i: could not parse date.');
+          debugPrint('[EXCEL_IMPORT] ⚠️ Skipping row $i: could not parse date.');
+          skippedCount++;
         }
       }
 
-      debugPrint('✅ Imported work hours from Excel.');
-    } catch (e) {
-      debugPrint('❌ Error importing from Excel: $e');
+      debugPrint('[EXCEL_IMPORT] ✅ Import completed. Imported: $importedCount, Skipped: $skippedCount');
+    } catch (e, stackTrace) {
+      debugPrint('[EXCEL_IMPORT] ❌ Error importing from Excel: $e');
+      debugPrint('[EXCEL_IMPORT] Stack trace: $stackTrace');
     }
   }
 
@@ -186,7 +230,7 @@ class HiveDb {
     }
   }
 
-  static Future<void> markOffDay(DateTime date) async {
+  static Future<void> markOffDay(DateTime date, {String? description}) async {
     try {
       final dateKey = DateFormat('yyyy-MM-dd').format(date);
       await _workHoursBox.delete(dateKey); // First delete any old entry
@@ -196,10 +240,11 @@ class HiveDb {
         'out': null,
         'duration': getDailyTargetMinutes(),
         'offDay': true,
+        'description': description,
       });
 
       await _syncTodayEntry();
-      debugPrint('✅ Marked $dateKey as Off Day.');
+      debugPrint('✅ Marked $dateKey as Off Day with description: $description');
     } catch (e) {
       debugPrint('Error in markOffDay: $e');
       rethrow;

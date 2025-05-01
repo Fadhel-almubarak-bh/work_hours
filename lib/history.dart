@@ -115,6 +115,7 @@ class _HistoryPageState extends State<HistoryPage> {
     DateTime? clockInTime;
     DateTime? clockOutTime;
     bool isOffDay = entry['offDay'] ?? false;
+    String? offDayDescription = entry['description'] as String?;
 
     if (entry['in'] != null) {
       clockInTime = DateTime.parse(entry['in']);
@@ -130,12 +131,13 @@ class _HistoryPageState extends State<HistoryPage> {
         clockInTime: clockInTime,
         clockOutTime: clockOutTime,
         isOffDay: isOffDay,
+        offDayDescription: offDayDescription,
       ),
     );
 
     if (result != null) {
       if (result['isOffDay']) {
-        await HiveDb.markOffDay(DateFormat('yyyy-MM-dd').parse(key));
+        await HiveDb.markOffDay(DateFormat('yyyy-MM-dd').parse(key), description: result['description']);
       } else {
         if (result['clockInTime'] != null) {
           await HiveDb.clockIn(result['clockInTime']);
@@ -254,6 +256,7 @@ class _HistoryPageState extends State<HistoryPage> {
                     final clockOutStr = data['out'] as String?;
                     final duration = data['duration'] as num?;
                     final isOffDay = data['offDay'] as bool? ?? false;
+                    final offDayDescription = data['description'] as String?;
 
                     DateTime? clockInTime;
                     DateTime? clockOutTime;
@@ -274,14 +277,17 @@ class _HistoryPageState extends State<HistoryPage> {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (isOffDay)
-                            Text('Off Day',
+                          if (isOffDay) ...[
+                            Text(
+                              offDayDescription ?? 'Off Day',
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: context.customColors.offDay,
                               ),
-                            )
-                          else ...[
+                            ),
+                            if (duration != null)
+                              Text('Duration: ${duration.toInt() ~/ 60}h ${duration.toInt() % 60}m'),
+                          ] else ...[
                             if (clockInTime != null)
                               Text('Clock In: ${DateFormat.Hm().format(clockInTime)}'),
                             if (clockOutTime != null)
@@ -325,6 +331,7 @@ class _EditEntryDialog extends StatefulWidget {
   final DateTime? clockInTime;
   final DateTime? clockOutTime;
   final bool isOffDay;
+  final String? offDayDescription;
 
   const _EditEntryDialog({
     super.key,
@@ -332,6 +339,7 @@ class _EditEntryDialog extends StatefulWidget {
     this.clockInTime,
     this.clockOutTime,
     required this.isOffDay,
+    this.offDayDescription,
   });
 
   @override
@@ -342,6 +350,7 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
   late DateTime? _clockInTime;
   late DateTime? _clockOutTime;
   late bool _isOffDay;
+  String? _offDayDescription;
 
   @override
   void initState() {
@@ -349,6 +358,7 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
     _clockInTime = widget.clockInTime;
     _clockOutTime = widget.clockOutTime;
     _isOffDay = widget.isOffDay;
+    _offDayDescription = widget.offDayDescription;
   }
 
   Future<void> _pickDateTime(bool isClockIn) async {
@@ -395,6 +405,41 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
     });
   }
 
+  Future<void> _selectOffDayType() async {
+    final description = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Off Day Type'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.medical_services),
+              title: const Text('Sick Leave'),
+              onTap: () => Navigator.pop(context, 'Sick Leave'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.celebration),
+              title: const Text('Public Holiday'),
+              onTap: () => Navigator.pop(context, 'Public Holiday'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.event_busy),
+              title: const Text('Regular Off Day'),
+              onTap: () => Navigator.pop(context, 'Regular Off Day'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (description != null) {
+      setState(() {
+        _offDayDescription = description;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -408,6 +453,12 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
             onChanged: (value) {
               setState(() {
                 _isOffDay = value;
+                if (value && _offDayDescription == null) {
+                  _selectOffDayType();
+                }
+                if (!value) {
+                  _offDayDescription = null;
+                }
                 if (value) {
                   _clockInTime = null;
                   _clockOutTime = null;
@@ -415,6 +466,13 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
               });
             },
           ),
+          if (_isOffDay)
+            ListTile(
+              title: const Text('Off Day Type'),
+              subtitle: Text(_offDayDescription ?? 'Not set'),
+              trailing: const Icon(Icons.edit),
+              onTap: _selectOffDayType,
+            ),
           if (!_isOffDay) ...[
             ListTile(
               title: const Text('Clock In'),
@@ -447,6 +505,7 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
                 'clockInTime': _clockInTime,
                 'clockOutTime': _clockOutTime,
                 'isOffDay': _isOffDay,
+                'description': _offDayDescription,
               });
             }
           },

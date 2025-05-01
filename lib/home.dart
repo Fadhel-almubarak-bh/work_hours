@@ -198,18 +198,48 @@ class _HomePageState extends State<HomePage>
       return;
     }
 
-    await HiveDb.markOffDay(usedTime);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Off day marked with 8 hours for $dateKey'),
-        backgroundColor: Colors.blue,
+    // Show dialog to select off day type
+    final description = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Off Day Type'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.medical_services),
+              title: const Text('Sick Leave'),
+              onTap: () => Navigator.pop(context, 'Sick Leave'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.celebration),
+              title: const Text('Public Holiday'),
+              onTap: () => Navigator.pop(context, 'Public Holiday'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.event_busy),
+              title: const Text('Regular Off Day'),
+              onTap: () => Navigator.pop(context, 'Regular Off Day'),
+            ),
+          ],
+        ),
       ),
     );
 
-    setState(() {
-      selectedDateTime = null;
-    });
+    if (description != null && mounted) {
+      await HiveDb.markOffDay(usedTime, description: description);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$description marked with 8 hours for $dateKey'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+
+      setState(() {
+        selectedDateTime = null;
+      });
+    }
   }
 
   @override
