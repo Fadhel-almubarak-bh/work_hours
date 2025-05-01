@@ -36,6 +36,11 @@ public class MyHomeWidgetProvider extends HomeWidgetProvider {
                 String overtimeText = prefs.getString("_overtimeText", "Overtime: 0h 0m");
                 int transparency = prefs.getInt(KEY_TRANSPARENCY, 255); // Default fully opaque
 
+                Log.d(TAG, "Widget data received - Clock In: " + clockInText);
+                Log.d(TAG, "Widget data received - Clock Out: " + clockOutText);
+                Log.d(TAG, "Widget data received - Overtime: " + overtimeText);
+                Log.d(TAG, "Widget data received - Transparency: " + transparency);
+
                 views.setTextViewText(R.id.widget_clock_in, clockInText);
                 views.setTextViewText(R.id.widget_clock_out, clockOutText);
                 views.setTextViewText(R.id.widget_overtime, overtimeText);
@@ -44,9 +49,19 @@ public class MyHomeWidgetProvider extends HomeWidgetProvider {
                 int backgroundColor = Color.argb(transparency, 0, 0, 0); // white with alpha
                 views.setInt(R.id.widget_root, "setBackgroundColor", backgroundColor);
 
-                // Set click listeners
-                views.setOnClickPendingIntent(R.id.widget_button_clock_in, getPendingIntent(context, "clock_in", appWidgetId, 0));
-                views.setOnClickPendingIntent(R.id.widget_button_clock_out, getPendingIntent(context, "clock_out", appWidgetId, 1));
+                // Set click listeners with proper intents
+                Intent clockInIntent = new Intent(context, MainActivity.class);
+                clockInIntent.setAction("CLOCK_IN");
+                PendingIntent clockInPendingIntent = PendingIntent.getActivity(
+                    context, 0, clockInIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                views.setOnClickPendingIntent(R.id.widget_button_clock_in, clockInPendingIntent);
+
+                Intent clockOutIntent = new Intent(context, MainActivity.class);
+                clockOutIntent.setAction("CLOCK_OUT");
+                PendingIntent clockOutPendingIntent = PendingIntent.getActivity(
+                    context, 1, clockOutIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                views.setOnClickPendingIntent(R.id.widget_button_clock_out, clockOutPendingIntent);
+
                 views.setOnClickPendingIntent(R.id.widget_button_settings, getSettingsIntent(context));
 
                 appWidgetManager.updateAppWidget(appWidgetId, views);

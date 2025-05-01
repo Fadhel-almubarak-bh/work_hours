@@ -10,6 +10,7 @@ import 'settings.dart';
 import 'hive_db.dart';
 import 'permissions.dart';
 import 'notification_service.dart';
+import 'package:flutter/services.dart';
 
 // Function to format duration for the widget
 
@@ -67,7 +68,6 @@ void main() async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
 
-
     // Set App Group ID
     await HomeWidget.setAppGroupId('group.com.example.work_hours');
     // Register the INTERACTIVITY callback
@@ -75,13 +75,28 @@ void main() async {
 
     HomeWidget.updateWidget(name: 'MyHomeWidgetProvider');
 
-
     tz.initializeTimeZones();
     await Hive.initFlutter(); // Ensure this is called before accessing Hive
     await Future.wait([
       Hive.openBox('work_hours'),
       Hive.openBox('settings'),
     ]);
+
+    // Set up widget event channel
+    const EventChannel eventChannel = EventChannel('widget_events');
+    eventChannel.receiveBroadcastStream().listen((dynamic event) {
+      debugPrint('Received widget event: $event');
+      if (event == 'clock_in') {
+        HiveDb.clockIn(DateTime.now());
+      } else if (event == 'clock_out') {
+        final now = DateTime.now();
+        final todayEntry = HiveDb.getDayEntry(now);
+        if (todayEntry != null && todayEntry['in'] != null && todayEntry['out'] == null) {
+          final clockInTime = DateTime.parse(todayEntry['in'] as String);
+          HiveDb.clockOut(now, clockInTime);
+        }
+      }
+    });
 
     runApp(const MyApp());
 

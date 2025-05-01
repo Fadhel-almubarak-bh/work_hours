@@ -8,44 +8,47 @@
     android:padding="8dp"
     android:background="@android:color/transparent">
 
-    <LinearLayout
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="42dp"
-        android:gravity="center_horizontal"
-        android:orientation="horizontal">
+        android:padding="8dp">
 
+        <!-- Settings aligned to the right -->
         <ImageView
             android:id="@+id/widget_button_settings"
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:layout_alignParentEnd="true"
-            android:layout_margin="8dp"
             android:clickable="true"
             android:contentDescription="Settings"
             android:focusable="true"
             android:src="@drawable/ic_settings" />
 
-        <ImageView
-            android:id="@+id/widget_button_next"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_margin="8dp"
-            android:clickable="true"
-            android:contentDescription="Next"
-            android:focusable="true"
-            android:src="@drawable/next_button" />
-
+        <!-- Previous button on the left -->
         <ImageView
             android:id="@+id/widget_button_previous"
             android:layout_width="24dp"
             android:layout_height="24dp"
-            android:layout_margin="8dp"
+            android:layout_alignParentStart="true"
+            android:layout_marginEnd="8dp"
             android:clickable="true"
             android:contentDescription="Previous"
             android:focusable="true"
             android:src="@drawable/previous_button" />
 
-    </LinearLayout>
+        <!-- Next button to the right of Previous -->
+        <ImageView
+            android:id="@+id/widget_button_next"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_toEndOf="@id/widget_button_previous"
+            android:clickable="true"
+            android:contentDescription="Next"
+            android:focusable="true"
+            android:src="@drawable/next_button" />
+
+    </RelativeLayout>
+
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -110,21 +113,27 @@
 
         <Button
             android:id="@+id/widget_button_clock_in"
-            style="@android:style/Widget.Material.Button.Colored"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginEnd="4dp"
             android:layout_weight="1"
-            android:text="Clock In" />
+            android:background="@drawable/rounded_white_button"
+            android:text="Clock In"
+            android:textStyle="bold"
+            android:textColor="#FFA500"
+        />
 
         <Button
             android:id="@+id/widget_button_clock_out"
-            style="@android:style/Widget.Material.Button.Colored"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="4dp"
             android:layout_weight="1"
-            android:text="Clock Out" />
+            android:background="@drawable/rounded_white_button"
+            android:text="Clock Out"
+            android:textStyle="bold"
+            android:textColor="#FFD700"
+        />
 
     </LinearLayout>
 

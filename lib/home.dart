@@ -6,6 +6,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
+import 'package:hive/hive.dart';
 import 'config.dart';
 import 'hive_db.dart';
 import 'notification_service.dart';
@@ -224,148 +225,159 @@ class _HomePageState extends State<HomePage>
         backgroundColor: colorScheme.primary,
         foregroundColor: theme.appBarTheme.foregroundColor,
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-          children: [
-            // Status Card
-            Card(
-              margin: const EdgeInsets.all(16),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Text(
-                      'Today\'s Status',
-                      style: theme.textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    if (clockInTime != null)
-                      Text(
-                        'Clocked in at: ${DateFormat.Hm().format(clockInTime!)}',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    if (clockOutTime != null)
-                      Text(
-                        'Clocked out at: ${DateFormat.Hm().format(clockOutTime!)}',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Time Selection Card
-            Card(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              child: ListTile(
-                leading: Icon(Icons.access_time, color: colorScheme.primary),
-                title: Text(
-                  selectedDateTime == null
-                      ? 'Current Time'
-                      : DateFormat('yyyy-MM-dd HH:mm')
-                          .format(selectedDateTime!),
-                  style: theme.textTheme.bodyMedium,
-                ),
-                trailing: Icon(Icons.edit, color: colorScheme.primary),
-                onTap: _pickDateTime,
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Action Buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: clockInTime == null ? _clockIn : null,
-                      icon: const Icon(Icons.login),
-                      label: const Text('Clock In'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.clockIn,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
+      body: ValueListenableBuilder(
+        valueListenable: HiveDb.getWorkHoursListenable(),
+        builder: (context, Box workHours, _) {
+          // Instead of calling setState here, we'll use the data directly
+          final data = HiveDb.getDayEntry(DateTime.now());
+          final clockInStr = data?['in'];
+          final clockOutStr = data?['out'];
+          
+          final parsedClockIn = clockInStr != null ? DateTime.tryParse(clockInStr) : null;
+          final parsedClockOut = clockOutStr != null ? DateTime.tryParse(clockOutStr) : null;
+          
+          return SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+              children: [
+                // Status Card
+                Card(
+                  margin: const EdgeInsets.all(16),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Today\'s Status',
+                          style: theme.textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        if (parsedClockIn != null)
+                          Text(
+                            'Clocked in at: ${DateFormat.Hm().format(parsedClockIn)}',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        if (parsedClockOut != null)
+                          Text(
+                            'Clocked out at: ${DateFormat.Hm().format(parsedClockOut)}',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: (clockInTime != null && clockOutTime == null)
-                          ? _clockOut
-                          : null,
-                      icon: const Icon(Icons.logout),
-                      label: const Text('Clock Out'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.clockOut,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Off Day Button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: ElevatedButton.icon(
-                onPressed: _markOffDay,
-                icon: const Icon(
-                  Icons.event_busy,
-                  color: Colors.white,
                 ),
-                label: const Text('Mark Off Day'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.offDay,
-                  foregroundColor: Colors.white, // Make sure text is readable
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  minimumSize: const Size(double.infinity, 0),
+
+                // Time Selection Card
+                Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  child: ListTile(
+                    leading: Icon(Icons.access_time, color: colorScheme.primary),
+                    title: Text(
+                      selectedDateTime == null
+                          ? 'Current Time'
+                          : DateFormat('yyyy-MM-dd HH:mm')
+                              .format(selectedDateTime!),
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    trailing: Icon(Icons.edit, color: colorScheme.primary),
+                    onTap: _pickDateTime,
+                  ),
                 ),
-              ),
-            ),
-            SizedBox(
-              height: 50,
-            ),
-            // Export and Import Buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _exportDataToExcel,
-                      icon: const Icon(Icons.save_alt, color: Colors.white),
-                      label: const Text('Export'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.export,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+
+                const SizedBox(height: 16),
+
+                // Action Buttons
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: (parsedClockIn == null || (parsedClockIn != null && parsedClockOut != null)) ? _clockIn : null,
+                          icon: const Icon(Icons.login),
+                          label: const Text('Clock In'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.clockIn,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                        ),
                       ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: (parsedClockIn != null && parsedClockOut == null) ? _clockOut : null,
+                          icon: const Icon(Icons.logout),
+                          label: const Text('Clock Out'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.clockOut,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Off Day Button
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: ElevatedButton.icon(
+                    onPressed: _markOffDay,
+                    icon: const Icon(
+                      Icons.event_busy,
+                      color: Colors.white,
+                    ),
+                    label: const Text('Mark Off Day'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.offDay,
+                      foregroundColor: Colors.white, // Make sure text is readable
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      minimumSize: const Size(double.infinity, 0),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _importDataFromExcel,
-                      icon: const Icon(Icons.upload_file, color: Colors.white),
-                      label: const Text('Import'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.import,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                SizedBox(
+                  height: 50,
+                ),
+                // Export and Import Buttons
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _exportDataToExcel,
+                          icon: const Icon(Icons.save_alt, color: Colors.white),
+                          label: const Text('Export'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.export,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _importDataFromExcel,
+                          icon: const Icon(Icons.upload_file, color: Colors.white),
+                          label: const Text('Import'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.import,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

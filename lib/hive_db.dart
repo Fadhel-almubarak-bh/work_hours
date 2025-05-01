@@ -461,11 +461,16 @@ class HiveDb {
       await HomeWidget.saveWidgetData<String>('_clockOutText', clockOutText);
       await HomeWidget.saveWidgetData<String>('_overtimeText', overtimeText);
 
+      debugPrint("Saving widget data:");
+      debugPrint("Clock In: $clockInText");
+      debugPrint("Clock Out: $clockOutText");
+      debugPrint("Overtime: $overtimeText");
+
       // Update the widget (this now implicitly handles click registration via the callback)
       await HomeWidget.updateWidget(
-          name: 'HomeWidgetProvider',
-          androidName: 'HomeWidgetProvider',
-          iOSName: 'HomeWidgetProvider');
+          name: 'MyHomeWidgetProvider',
+          androidName: 'MyHomeWidgetProvider',
+          iOSName: 'MyHomeWidgetProvider');
 
       debugPrint("HomeWidget data saved and update triggered.");
     } catch (e) {

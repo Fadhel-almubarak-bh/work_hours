@@ -26,9 +26,28 @@ class _HistoryPageState extends State<HistoryPage> {
     if (data['offDay'] == true) {
       return 'Off Day - ${_formatDuration(data['duration'])}';
     }
-    return 'In: ${data['in'] != null ? DateFormat.Hm().format(DateTime.parse(data['in'])) : 'N/A'}, '
-        'Out: ${data['out'] != null ? DateFormat.Hm().format(DateTime.parse(data['out'])) : 'N/A'}\n'
-        'Worked: ${_formatDuration(data['duration'])}';
+
+    String clockInStr = 'N/A';
+    String clockOutStr = 'N/A';
+
+    try {
+      if (data['in'] != null) {
+        final parsedIn = DateTime.tryParse(data['in']);
+        if (parsedIn != null) {
+          clockInStr = DateFormat.Hm().format(parsedIn);
+        }
+      }
+      if (data['out'] != null) {
+        final parsedOut = DateTime.tryParse(data['out']);
+        if (parsedOut != null) {
+          clockOutStr = DateFormat.Hm().format(parsedOut);
+        }
+      }
+    } catch (e) {
+      // If there's any error in parsing, keep the default 'N/A' values
+    }
+
+    return 'In: $clockInStr, Out: $clockOutStr\nWorked: ${_formatDuration(data['duration'])}';
   }
 
   Future<bool> _confirmAndDeleteAll() async {
@@ -138,21 +157,39 @@ class _HistoryPageState extends State<HistoryPage> {
     final groupedEntries = <String, List<MapEntry<String, dynamic>>>{};
 
     for (final entry in entries.entries) {
-      final date = DateTime.parse(entry.key.toString());
-      final monthKey = DateFormat('yyyy-MM').format(date);
+      try {
+        final date = DateTime.tryParse(entry.key.toString());
+        if (date != null) {
+          final monthKey = DateFormat('yyyy-MM').format(date);
 
-      if (!groupedEntries.containsKey(monthKey)) {
-        groupedEntries[monthKey] = [];
+          if (!groupedEntries.containsKey(monthKey)) {
+            groupedEntries[monthKey] = [];
+          }
+          groupedEntries[monthKey]!.add(MapEntry<String, dynamic>(
+            entry.key.toString(),
+            Map<String, dynamic>.from(entry.value as Map),
+          ));
+        }
+      } catch (e) {
+        // Skip invalid entries
+        continue;
       }
-      groupedEntries[monthKey]!.add(MapEntry<String, dynamic>(
-        entry.key.toString(),
-        Map<String, dynamic>.from(entry.value as Map),
-      ));
     }
 
     // Sort entries within each month
     for (final monthEntries in groupedEntries.values) {
-      monthEntries.sort((a, b) => b.key.compareTo(a.key));
+      monthEntries.sort((a, b) {
+        try {
+          final dateA = DateTime.tryParse(a.key);
+          final dateB = DateTime.tryParse(b.key);
+          if (dateA != null && dateB != null) {
+            return b.key.compareTo(a.key);
+          }
+        } catch (e) {
+          // If there's an error in comparison, keep the original order
+        }
+        return 0;
+      });
     }
 
     return groupedEntries;
@@ -160,7 +197,6 @@ class _HistoryPageState extends State<HistoryPage> {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       appBar: AppBar(
         title: Text('History', style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -193,7 +229,11 @@ class _HistoryPageState extends State<HistoryPage> {
             itemBuilder: (context, index) {
               final monthKey = groupedEntries.keys.elementAt(index);
               final monthEntries = groupedEntries[monthKey]!;
-              final monthDate = DateTime.parse(monthKey + '-01');
+              final monthDate = DateTime.tryParse(monthKey + '-01');
+
+              if (monthDate == null) {
+                return const SizedBox.shrink();
+              }
 
               return ExpansionTile(
                 title: Text(
@@ -203,59 +243,73 @@ class _HistoryPageState extends State<HistoryPage> {
                       ),
                 ),
                 children: monthEntries.map((entry) {
-                  final date = DateTime.parse(entry.key);
-                  final data = entry.value;
-                  final clockInStr = data['in'] as String?;
-                  final clockOutStr = data['out'] as String?;
-                  final duration = data['duration'] as num?;
-                  final isOffDay = data['offDay'] as bool? ?? false;
+                  try {
+                    final date = DateTime.tryParse(entry.key);
+                    if (date == null) {
+                      return const SizedBox.shrink();
+                    }
 
-                  final clockInTime =
-                      clockInStr != null ? DateTime.parse(clockInStr) : null;
-                  final clockOutTime =
-                      clockOutStr != null ? DateTime.parse(clockOutStr) : null;
+                    final data = entry.value;
+                    final clockInStr = data['in'] as String?;
+                    final clockOutStr = data['out'] as String?;
+                    final duration = data['duration'] as num?;
+                    final isOffDay = data['offDay'] as bool? ?? false;
 
-                  return ListTile(
-                    title: Text(DateFormat('EEEE, MMMM d').format(date),style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (isOffDay)
-                          Text('Off Day',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.bold,color: context.customColors.offDay,
-                            ),)
-                        else ...[
-                          if (clockInTime != null)
-                            Text(
-                                'Clock In: ${DateFormat.Hm().format(clockInTime)}'),
-                          if (clockOutTime != null)
-                            Text(
-                                'Clock Out: ${DateFormat.Hm().format(clockOutTime)}'),
-                          if (duration != null)
-                            Text(
-                                'Duration: ${duration.toInt() ~/ 60}h ${duration.toInt() % 60}m'),
+                    DateTime? clockInTime;
+                    DateTime? clockOutTime;
+
+                    if (clockInStr != null) {
+                      clockInTime = DateTime.tryParse(clockInStr);
+                    }
+                    if (clockOutStr != null) {
+                      clockOutTime = DateTime.tryParse(clockOutStr);
+                    }
+
+                    return ListTile(
+                      title: Text(DateFormat('EEEE, MMMM d').format(date),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (isOffDay)
+                            Text('Off Day',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: context.customColors.offDay,
+                              ),
+                            )
+                          else ...[
+                            if (clockInTime != null)
+                              Text('Clock In: ${DateFormat.Hm().format(clockInTime)}'),
+                            if (clockOutTime != null)
+                              Text('Clock Out: ${DateFormat.Hm().format(clockOutTime)}'),
+                            if (duration != null)
+                              Text('Duration: ${duration.toInt() ~/ 60}h ${duration.toInt() % 60}m'),
+                          ],
                         ],
-                      ],
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit),
-                          onPressed: () => _editEntry(entry.key, data),
-                          tooltip: 'Edit Entry',
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete),
-                          onPressed: () => _confirmAndDeleteEntry(entry.key),
-                          tooltip: 'Delete Entry',
-                        ),
-                      ],
-                    ),
-                  );
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit),
+                            onPressed: () => _editEntry(entry.key, data),
+                            tooltip: 'Edit Entry',
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete),
+                            onPressed: () => _confirmAndDeleteEntry(entry.key),
+                            tooltip: 'Delete Entry',
+                          ),
+                        ],
+                      ),
+                    );
+                  } catch (e) {
+                    return const SizedBox.shrink();
+                  }
                 }).toList(),
               );
             },
