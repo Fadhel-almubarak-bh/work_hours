@@ -1,6 +1,6 @@
 # work_hours
 
-> A Flutter application to track work hours.
+> A Flutter application to track work hours. I had a problem, worked this solution.
 
 ## Table of Contents
 
