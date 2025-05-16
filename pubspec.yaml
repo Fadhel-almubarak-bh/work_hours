@@ -36,6 +36,7 @@ dependencies:
   permission_handler: ^11.0.1
   flutter_launcher_icons: ^0.14.3
   shared_preferences: ^2.2.2
+  table_calendar: ^3.0.9
 
   cupertino_icons: ^1.0.2
   flutter_local_notifications: ^19.1.0

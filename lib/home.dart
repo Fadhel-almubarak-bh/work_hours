@@ -218,8 +218,8 @@ class _HomePageState extends State<HomePage>
             ),
             ListTile(
               leading: const Icon(Icons.event_busy),
-              title: const Text('Regular Off Day'),
-              onTap: () => Navigator.pop(context, 'Regular Off Day'),
+              title: const Text('Annual Leave'),
+              onTap: () => Navigator.pop(context, 'Annual Leave'),
             ),
           ],
         ),

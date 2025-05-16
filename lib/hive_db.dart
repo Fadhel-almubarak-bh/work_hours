@@ -107,7 +107,7 @@ class HiveDb {
         debugPrint('[EXCEL_IMPORT] Row values - Clock In: $clockInStr, Clock Out: $clockOutStr, Off Day: $offDayStr, Description: $descriptionStr');
 
         bool isOffDay = offDayStr == 'yes' || offDayStr == 'true' || offDayStr == '1';
-        String? description = isOffDay ? (descriptionStr ?? 'Regular Off Day') : null;
+        String? description = isOffDay ? (descriptionStr ?? 'Annual Leave') : null;
 
         if (dateKey != null) {
           if (isOffDay) {

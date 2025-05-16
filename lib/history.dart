@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:intl/intl.dart';
+import 'package:table_calendar/table_calendar.dart';
 import 'package:work_hours/theme_extensions.dart';
 import 'config.dart';
 import 'hive_db.dart';
@@ -13,6 +14,33 @@ class HistoryPage extends StatefulWidget {
 }
 
 class _HistoryPageState extends State<HistoryPage> {
+  CalendarFormat _calendarFormat = CalendarFormat.month;
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
+  late Map<DateTime, Map<String, dynamic>> _events;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEvents();
+  }
+
+  void _loadEvents() {
+    final entries = HiveDb.getAllEntries();
+    _events = {};
+    
+    entries.forEach((key, value) {
+      try {
+        final date = DateTime.parse(key);
+        // Normalize the date to remove time component
+        final normalizedDate = DateTime(date.year, date.month, date.day);
+        _events[normalizedDate] = Map<String, dynamic>.from(value);
+      } catch (e) {
+        debugPrint('Error parsing date: $e');
+      }
+    });
+  }
+
   String _formatDuration(dynamic minutesValue) {
     if (minutesValue == null) return '0h 0m';
     final totalMinutes = (minutesValue as num).toInt();
@@ -20,7 +48,6 @@ class _HistoryPageState extends State<HistoryPage> {
     final minutes = totalMinutes % 60;
     return '${hours}h ${minutes}m';
   }
-
 
   String _getEntryDescription(Map<dynamic, dynamic> data) {
     if (data['offDay'] == true) {
@@ -72,6 +99,9 @@ class _HistoryPageState extends State<HistoryPage> {
 
     if (confirmed == true) {
       await HiveDb.deleteAllEntries();
+      setState(() {
+        _loadEvents();
+      });
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('All entries deleted')),
@@ -102,6 +132,9 @@ class _HistoryPageState extends State<HistoryPage> {
 
     if (confirmed == true) {
       await HiveDb.deleteEntry(key);
+      setState(() {
+        _loadEvents();
+      });
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Entry deleted')),
@@ -137,7 +170,8 @@ class _HistoryPageState extends State<HistoryPage> {
 
     if (result != null) {
       if (result['isOffDay']) {
-        await HiveDb.markOffDay(DateFormat('yyyy-MM-dd').parse(key), description: result['description']);
+        await HiveDb.markOffDay(DateFormat('yyyy-MM-dd').parse(key),
+            description: result['description']);
       } else {
         if (result['clockInTime'] != null) {
           await HiveDb.clockIn(result['clockInTime']);
@@ -146,6 +180,9 @@ class _HistoryPageState extends State<HistoryPage> {
           await HiveDb.clockOut(result['clockOutTime'], result['clockInTime']);
         }
       }
+      setState(() {
+        _loadEvents();
+      });
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Entry updated')),
@@ -154,57 +191,67 @@ class _HistoryPageState extends State<HistoryPage> {
     }
   }
 
-  Map<String, List<MapEntry<String, dynamic>>> _groupEntriesByMonth(
-      Map<dynamic, dynamic> entries) {
-    final groupedEntries = <String, List<MapEntry<String, dynamic>>>{};
+  void _showDayDetails(DateTime day) {
+    final normalizedDate = DateTime(day.year, day.month, day.day);
+    final entry = _events[normalizedDate];
+    if (entry == null) return;
 
-    for (final entry in entries.entries) {
-      try {
-        final date = DateTime.tryParse(entry.key.toString());
-        if (date != null) {
-          final monthKey = DateFormat('yyyy-MM').format(date);
-
-          if (!groupedEntries.containsKey(monthKey)) {
-            groupedEntries[monthKey] = [];
-          }
-          groupedEntries[monthKey]!.add(MapEntry<String, dynamic>(
-            entry.key.toString(),
-            Map<String, dynamic>.from(entry.value as Map),
-          ));
-        }
-      } catch (e) {
-        // Skip invalid entries
-        continue;
-      }
-    }
-
-    // Sort entries within each month
-    for (final monthEntries in groupedEntries.values) {
-      monthEntries.sort((a, b) {
-        try {
-          final dateA = DateTime.tryParse(a.key);
-          final dateB = DateTime.tryParse(b.key);
-          if (dateA != null && dateB != null) {
-            return b.key.compareTo(a.key);
-          }
-        } catch (e) {
-          // If there's an error in comparison, keep the original order
-        }
-        return 0;
-      });
-    }
-
-    return groupedEntries;
+    final dateKey = DateFormat('yyyy-MM-dd').format(day);
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              DateFormat('EEEE, MMMM d, yyyy').format(day),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _getEntryDescription(entry),
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _confirmAndDeleteEntry(dateKey);
+                  },
+                  child: const Text('Delete'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _editEntry(dateKey, entry);
+                  },
+                  child: const Text('Edit'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('History', style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-          fontWeight: FontWeight.bold,
-          color: context.customColors.infoDark
-        ),),
+        title: Text(
+          'History',
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: context.customColors.infoDark,
+              ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_sweep),
@@ -216,112 +263,136 @@ class _HistoryPageState extends State<HistoryPage> {
       body: ValueListenableBuilder(
         valueListenable: HiveDb.getWorkHoursListenable(),
         builder: (context, Box workHours, _) {
-          final entries = HiveDb.getAllEntries();
-          final groupedEntries = _groupEntriesByMonth(entries);
-
-          if (entries.isEmpty) {
-            return const Center(
-              child: Text('No entries yet'),
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-            itemCount: groupedEntries.length,
-            itemBuilder: (context, index) {
-              final monthKey = groupedEntries.keys.elementAt(index);
-              final monthEntries = groupedEntries[monthKey]!;
-              final monthDate = DateTime.tryParse(monthKey + '-01');
-
-              if (monthDate == null) {
-                return const SizedBox.shrink();
-              }
-
-              return ExpansionTile(
-                title: Text(
-                  DateFormat('MMMM yyyy').format(monthDate),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+          _loadEvents(); // Reload events when the box changes
+          
+          return Column(
+            children: [
+              TableCalendar(
+                firstDay: DateTime.utc(2020, 1, 1),
+                lastDay: DateTime.utc(2030, 12, 31),
+                focusedDay: _focusedDay,
+                calendarFormat: _calendarFormat,
+                selectedDayPredicate: (day) {
+                  return isSameDay(_selectedDay, day);
+                },
+                onDaySelected: (selectedDay, focusedDay) {
+                  setState(() {
+                    _selectedDay = selectedDay;
+                    _focusedDay = focusedDay;
+                  });
+                  _showDayDetails(selectedDay);
+                },
+                onFormatChanged: (format) {
+                  setState(() {
+                    _calendarFormat = format;
+                  });
+                },
+                onPageChanged: (focusedDay) {
+                  _focusedDay = focusedDay;
+                },
+                calendarStyle: CalendarStyle(
+                  weekendTextStyle: const TextStyle(color: Colors.red),
+                  holidayTextStyle: const TextStyle(color: Colors.blue),
                 ),
-                children: monthEntries.map((entry) {
-                  try {
-                    final date = DateTime.tryParse(entry.key);
-                    if (date == null) {
-                      return const SizedBox.shrink();
+                calendarBuilders: CalendarBuilders(
+                  markerBuilder: (context, date, events) {
+                    final normalizedDate = DateTime(date.year, date.month, date.day);
+                    final entry = _events[normalizedDate];
+                    if (entry == null) return null;
+
+                    final isOffDay = entry['offDay'] == true;
+                    final duration = entry['duration'] as num?;
+                    final hasClockIn = entry['in'] != null;
+                    final hasClockOut = entry['out'] != null;
+
+                    Color markerColor;
+                    if (isOffDay) {
+                      markerColor = context.customColors.offDay;
+                    } else if (hasClockIn && hasClockOut) {
+                      markerColor = Colors.green;
+                    } else if (hasClockIn) {
+                      markerColor = Colors.orange;
+                    } else {
+                      markerColor = Colors.grey;
                     }
 
-                    final data = entry.value;
-                    final clockInStr = data['in'] as String?;
-                    final clockOutStr = data['out'] as String?;
-                    final duration = data['duration'] as num?;
-                    final isOffDay = data['offDay'] as bool? ?? false;
-                    final offDayDescription = data['description'] as String?;
-
-                    DateTime? clockInTime;
-                    DateTime? clockOutTime;
-
-                    if (clockInStr != null) {
-                      clockInTime = DateTime.tryParse(clockInStr);
-                    }
-                    if (clockOutStr != null) {
-                      clockOutTime = DateTime.tryParse(clockOutStr);
-                    }
-
-                    return ListTile(
-                      title: Text(DateFormat('EEEE, MMMM d').format(date),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
+                    return Container(
+                      margin: const EdgeInsets.only(top: 20),
+                      padding: const EdgeInsets.all(1),
+                      child: Container(
+                        height: 16,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.rectangle,
+                          borderRadius: BorderRadius.circular(4),
+                          color: markerColor.withOpacity(0.3),
+                        ),
+                        child: Center(
+                          child: Text(
+                            duration != null ? _formatDuration(duration) : '',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: markerColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (isOffDay) ...[
-                            Text(
-                              offDayDescription ?? 'Off Day',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: context.customColors.offDay,
-                              ),
-                            ),
-                            if (duration != null)
-                              Text('Duration: ${duration.toInt() ~/ 60}h ${duration.toInt() % 60}m'),
-                          ] else ...[
-                            if (clockInTime != null)
-                              Text('Clock In: ${DateFormat.Hm().format(clockInTime)}'),
-                            if (clockOutTime != null)
-                              Text('Clock Out: ${DateFormat.Hm().format(clockOutTime)}'),
-                            if (duration != null)
-                              Text('Duration: ${duration.toInt() ~/ 60}h ${duration.toInt() % 60}m'),
-                          ],
-                        ],
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit),
-                            onPressed: () => _editEntry(entry.key, data),
-                            tooltip: 'Edit Entry',
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete),
-                            onPressed: () => _confirmAndDeleteEntry(entry.key),
-                            tooltip: 'Delete Entry',
-                          ),
-                        ],
-                      ),
                     );
-                  } catch (e) {
-                    return const SizedBox.shrink();
-                  }
-                }).toList(),
-              );
-            },
+                  },
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _LegendItem(
+                      color: Colors.green,
+                      label: 'Completed',
+                    ),
+                    _LegendItem(
+                      color: Colors.orange,
+                      label: 'In Progress',
+                    ),
+                    _LegendItem(
+                      color: Colors.blue,
+                      label: 'Off Day',
+                    ),
+                  ],
+                ),
+              ),
+            ],
           );
         },
       ),
+    );
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _LegendItem({
+    required this.color,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(label),
+      ],
     );
   }
 }
@@ -425,8 +496,8 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
             ),
             ListTile(
               leading: const Icon(Icons.event_busy),
-              title: const Text('Regular Off Day'),
-              onTap: () => Navigator.pop(context, 'Regular Off Day'),
+              title: const Text('Annual Leave'),
+              onTap: () => Navigator.pop(context, 'Annual Leave'),
             ),
           ],
         ),
@@ -514,4 +585,4 @@ class _EditEntryDialogState extends State<_EditEntryDialog> {
       ],
     );
   }
-}
+} 
