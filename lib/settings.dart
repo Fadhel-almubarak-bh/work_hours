@@ -101,6 +101,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                     final newWorkDays =
                                         List<bool>.from(workDays);
                                     newWorkDays[i] = value;
+                                    debugPrint('🔧 [SETTINGS] Changing work day ${_getDayName(i)} to $value');
+                                    debugPrint('🔧 [SETTINGS] New work days array: $newWorkDays');
                                     HiveDb.setWorkDays(newWorkDays);
                                   }
                                 },

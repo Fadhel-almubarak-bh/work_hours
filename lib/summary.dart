@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:intl/intl.dart';
 import 'config.dart';
 import 'hive_db.dart';
 
@@ -73,9 +74,15 @@ class _SummaryPageState extends State<SummaryPage> {
         }
       }
 
-      // Calculate overtime for completed days only (up to yesterday)
-      final overtimeMinutesUntilYesterday =
-          HiveDb.calculateOvertimeUntilYesterday();
+      // Calculate monthly overtime using the new method
+      final overtimeMinutes = HiveDb.getMonthlyOvertime();
+      
+      // Calculate last month's overtime
+      final lastMonthOvertimeMinutes = HiveDb.getLastMonthOvertime();
+      
+      // Get expected minutes for both months
+      final currentMonthExpectedMinutes = HiveDb.getCurrentMonthExpectedMinutes();
+      final lastMonthExpectedMinutes = HiveDb.getLastMonthExpectedMinutes();
 
       // Calculate weekly and monthly totals separately
       final weeklyTotal = (weekStats['totalMinutes'] as num).toInt() +
@@ -95,7 +102,10 @@ class _SummaryPageState extends State<SummaryPage> {
                 : (todayEntry?['offDay'] == true ? 1 : 0)),
         'monthlyOffDays': (monthStats['offDays'] as num).toInt(),
         'lastMonthOffDays': (lastMonthStats['offDays'] as num).toInt(),
-        'overtimeMinutes': overtimeMinutesUntilYesterday,
+        'overtimeMinutes': overtimeMinutes,
+        'lastMonthOvertimeMinutes': lastMonthOvertimeMinutes,
+        'currentMonthExpectedMinutes': currentMonthExpectedMinutes,
+        'lastMonthExpectedMinutes': lastMonthExpectedMinutes,
       };
     } catch (e) {
       debugPrint('Error calculating summary: $e');
@@ -107,6 +117,24 @@ class _SummaryPageState extends State<SummaryPage> {
 
   void _refreshSummary() {
     setState(() {
+      HiveDb.printAllWorkHourEntries();
+      debugPrint("---------------->");
+      HiveDb.calculateAndPrintMonthlyOvertime();
+      
+      // Current month details
+      final currentMonthExpected = HiveDb.getCurrentMonthExpectedMinutes();
+      final currentMonthOvertime = HiveDb.getMonthlyOvertime();
+      debugPrint("\n📅 [CURRENT MONTH]");
+      debugPrint("Expected Hours: ${formatDuration(currentMonthExpected)}");
+      debugPrint("Overtime: ${currentMonthOvertime >= 0 ? '+' : ''}${formatDuration(currentMonthOvertime.abs())}");
+      
+      // Last month details
+      final lastMonthExpected = HiveDb.getLastMonthExpectedMinutes();
+      final lastMonthOvertime = HiveDb.getLastMonthOvertime();
+      debugPrint("\n📅 [LAST MONTH]");
+      debugPrint("Expected Hours: ${formatDuration(lastMonthExpected)}");
+      debugPrint("Overtime: ${lastMonthOvertime >= 0 ? '+' : ''}${formatDuration(lastMonthOvertime.abs())}");
+      
       _summaryFuture = _calculateSummary();
     });
   }
@@ -238,6 +266,9 @@ class _SummaryPageState extends State<SummaryPage> {
     required int offDays,
     required Color color,
     bool showTarget = true,
+    int? overtime,
+    String? subtitle,
+    int? expectedMinutes,
   }) {
     final progress = showTarget ? (current / target).clamp(0.0, 1.0) : 1.0;
     final remaining = showTarget ? (target - current).clamp(0, target) : 0;
@@ -253,7 +284,46 @@ class _SummaryPageState extends State<SummaryPage> {
               title,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+            ],
             const SizedBox(height: 16),
+            
+            // Only show expected vs actual hours if expectedMinutes is provided
+            if (expectedMinutes != null) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Expected:',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    formatDuration(expectedMinutes),
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Actual:',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    formatDuration(current),
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ],
+              ),
+              const Divider(height: 20),
+            ],
+            
             if (showTarget)
               LinearProgressIndicator(
                 value: progress,
@@ -297,6 +367,15 @@ class _SummaryPageState extends State<SummaryPage> {
                       'Off Days: $offDays',
                       style: const TextStyle(fontSize: 14),
                     ),
+                    if (overtime != null)
+                      Text(
+                        'Overtime: ${overtime >= 0 ? '+' : ''}${formatDuration(overtime.abs())}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: overtime >= 0 ? Colors.green : Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                   ],
                 ),
                 if (showTarget)
@@ -316,7 +395,60 @@ class _SummaryPageState extends State<SummaryPage> {
   }
 
   Widget _buildOvertimeCard(Map<String, dynamic> summary) {
-    final overtimeMinutes = summary['overtimeMinutes'] as int? ?? 0;
+    // Get the accurate overtime using our new method
+    final currentMonthOvertimeMinutes = HiveDb.getMonthlyOvertime();
+    
+    // Get extra details for display
+    final now = DateTime.now();
+    final firstOfMonth = DateTime(now.year, now.month, 1);
+    final today = DateTime(now.year, now.month, now.day);
+    final allEntries = HiveDb.getAllEntries();
+    final workDaysSetting = HiveDb.getWorkDays();
+    final dailyTarget = HiveDb.getDailyTargetMinutes();
+    
+    // Count various day types for display
+    int regularWorkDays = 0;
+    int offDays = 0;
+    int extraWorkDays = 0;
+    int configuredWorkDaysThisMonth = 0;
+    int missedWorkDays = 0;
+    int totalWorkedMinutes = 0;
+    int totalExpectedMinutes = 0;
+    
+    for (var day = firstOfMonth;
+        day.isBefore(today.add(const Duration(days: 1)));
+        day = day.add(const Duration(days: 1))) {
+      final dateKey = DateFormat('yyyy-MM-dd').format(day);
+      final entry = allEntries[dateKey];
+      final weekdayIndex = day.weekday - 1; // 0-based index (0 = Monday)
+      final bool isWorkDay = workDaysSetting[weekdayIndex];
+      
+      if (isWorkDay) {
+        configuredWorkDaysThisMonth++;
+        totalExpectedMinutes += dailyTarget;
+        
+        // Check if this configured work day has no entry
+        if (entry == null) {
+          missedWorkDays++;
+        }
+      }
+      
+      if (entry != null) {
+        if (entry['offDay'] == true) {
+          offDays++;
+          totalWorkedMinutes += dailyTarget;
+        } else if (entry['duration'] != null) {
+          final duration = (entry['duration'] as num).toInt();
+          totalWorkedMinutes += duration;
+          
+          if (isWorkDay) {
+            regularWorkDays++;
+          } else {
+            extraWorkDays++;
+          }
+        }
+      }
+    }
 
     return Card(
       elevation: 4,
@@ -326,38 +458,104 @@ class _SummaryPageState extends State<SummaryPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Monthly Progress (Up to Yesterday)',
+              'Overtime Tracker',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 16),
+            // Current month's overtime (accurate calculation)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Overtime',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: overtimeMinutes >= 0 ? Colors.green : Colors.red,
-                      ),
+                  'Monthly Overtime',
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
                 Text(
-                  formatDuration(overtimeMinutes.abs()),
+                  (currentMonthOvertimeMinutes >= 0 ? '+' : '') + formatDuration(currentMonthOvertimeMinutes.abs()),
                   style: TextStyle(
-                    fontSize: 16,
-                    color: overtimeMinutes >= 0 ? Colors.green : Colors.red,
+                    fontSize: 18,
+                    color: currentMonthOvertimeMinutes >= 0 ? Colors.green : Colors.red,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ],
             ),
-            if (overtimeMinutes != 0) ...[
-              const SizedBox(height: 8),
+            const SizedBox(height: 12),
+            
+            // Expected vs Actual hours
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Expected:',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  formatDuration(totalExpectedMinutes),
+                  style: TextStyle(fontSize: 13),
+                ),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Actual:',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  formatDuration(totalWorkedMinutes),
+                  style: TextStyle(fontSize: 13),
+                ),
+              ],
+            ),
+            
+            const Divider(height: 20),
+            
+            // Day counts
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Regular Days: $regularWorkDays', style: TextStyle(fontSize: 13)),
+                    Text('Off Days: $offDays', style: TextStyle(fontSize: 13)),
+                    Text('Extra Days: $extraWorkDays', style: TextStyle(fontSize: 13)),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('Required Days: $configuredWorkDaysThisMonth', style: TextStyle(fontSize: 13)),
+                    Text('Missed Days: $missedWorkDays', style: TextStyle(fontSize: 13, color: Colors.red)),
+                    Text('Daily Target: ${formatDuration(dailyTarget)}', style: TextStyle(fontSize: 13)),
+                  ],
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 12),
+            if (currentMonthOvertimeMinutes != 0) ...[
               Text(
-                overtimeMinutes > 0
-                    ? 'You are ${formatDuration(overtimeMinutes)} ahead of schedule'
-                    : 'You are ${formatDuration(overtimeMinutes.abs())} behind schedule',
+                currentMonthOvertimeMinutes > 0
+                    ? 'You are ${formatDuration(currentMonthOvertimeMinutes)} ahead of schedule'
+                    : 'You are ${formatDuration(currentMonthOvertimeMinutes.abs())} behind schedule',
                 style: TextStyle(
                   fontSize: 14,
-                  color: overtimeMinutes > 0 ? Colors.green : Colors.red,
+                  color: currentMonthOvertimeMinutes > 0 ? Colors.green : Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+            
+            if (missedWorkDays > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                'You have $missedWorkDays missed work ${missedWorkDays == 1 ? 'day' : 'days'} this month',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.red,
                 ),
               ),
             ],
@@ -397,6 +595,13 @@ class _SummaryPageState extends State<SummaryPage> {
                   final summary = snapshot.data ?? {};
                   final weeklyTarget = HiveDb.getWeeklyTargetMinutes();
                   final monthlyTarget = HiveDb.getMonthlyTargetMinutes();
+                  
+                  // Get the current and last month periods for subtitles
+                  final now = DateTime.now();
+                  final currentMonth = DateTime(now.year, now.month, 1);
+                  final lastMonth = DateTime(now.year, now.month - 1, 1);
+                  final currentMonthName = DateFormat('MMMM yyyy').format(currentMonth);
+                  final lastMonthName = DateFormat('MMMM yyyy').format(lastMonth);
 
                   return SingleChildScrollView(
                     child: Padding(
@@ -424,6 +629,7 @@ class _SummaryPageState extends State<SummaryPage> {
                           const SizedBox(height: 24),
                           _buildProgressCard(
                             title: 'Monthly Progress',
+                            subtitle: 'For $currentMonthName',
                             current:
                                 (summary['monthlyTotal'] as num?)?.toInt() ?? 0,
                             target: monthlyTarget,
@@ -434,10 +640,13 @@ class _SummaryPageState extends State<SummaryPage> {
                                 (summary['monthlyOffDays'] as num?)?.toInt() ??
                                     0,
                             color: AppColors.secondaryLight,
+                            overtime: (summary['overtimeMinutes'] as num?)?.toInt(),
+                            expectedMinutes: (summary['currentMonthExpectedMinutes'] as num?)?.toInt(),
                           ),
                           const SizedBox(height: 24),
                           _buildProgressCard(
                             title: 'Last Month Summary',
+                            subtitle: 'For $lastMonthName',
                             current:
                                 (summary['lastMonthTotal'] as num?)?.toInt() ??
                                     0,
@@ -450,6 +659,8 @@ class _SummaryPageState extends State<SummaryPage> {
                                 0,
                             color: AppColors.infoLight,
                             showTarget: false,
+                            overtime: (summary['lastMonthOvertimeMinutes'] as num?)?.toInt(),
+                            expectedMinutes: (summary['lastMonthExpectedMinutes'] as num?)?.toInt(),
                           ),
                         ],
                       ),
