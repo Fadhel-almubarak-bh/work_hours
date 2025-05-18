@@ -46,27 +46,19 @@ class _HomePageState extends State<HomePage>
   Future<void> _exportDataToExcel() async {
     try {
       await HiveDb.exportDataToExcel();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ Excel Export successfully')),
-      );
+      NotificationUtil.showSuccess(context, '✅ Excel Export successfully');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Error exporting to Excel: $e')),
-      );
+      NotificationUtil.showError(context, '❌ Error exporting to Excel: $e');
     }
   }
 
   Future<void> _importDataFromExcel() async {
     try {
       await HiveDb.importDataFromExcel();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ Excel Import successful')),
-      );
+      NotificationUtil.showSuccess(context, '✅ Excel Import successful');
       setState(() {});
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Error importing Excel: $e')),
-      );
+      NotificationUtil.showError(context, '❌ Error importing Excel: $e');
     }
   }
 
@@ -103,34 +95,6 @@ class _HomePageState extends State<HomePage>
     }
   }
 
-  Future<void> _pickDateTime() async {
-    final pickedDate = await showDatePicker(
-      context: context,
-      initialDate: selectedDateTime ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-
-    if (pickedDate == null) return;
-
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(selectedDateTime ?? DateTime.now()),
-    );
-
-    if (pickedTime == null) return;
-
-    setState(() {
-      selectedDateTime = DateTime(
-        pickedDate.year,
-        pickedDate.month,
-        pickedDate.day,
-        pickedTime.hour,
-        pickedTime.minute,
-      );
-    });
-  }
-
   void _clockIn() async {
     final now = DateTime.now();
     final usedTime = selectedDateTime ?? now;
@@ -142,12 +106,7 @@ class _HomePageState extends State<HomePage>
       selectedDateTime = null;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Clocked in at ${DateFormat.Hm().format(usedTime)}'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    NotificationUtil.showSuccess(context, 'Clocked in at ${DateFormat.Hm().format(usedTime)}');
   }
 
   void _clockOut() async {
@@ -164,21 +123,12 @@ class _HomePageState extends State<HomePage>
         selectedDateTime = null;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Clocked out at ${DateFormat.Hm().format(usedTime)}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      NotificationUtil.showInfo(context, 'Clocked out at ${DateFormat.Hm().format(usedTime)}');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().contains('before clock in time')
-              ? 'Error: Clock out time cannot be before clock in time'
-              : 'Error clocking out: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      String errorMessage = e.toString().contains('before clock in time')
+          ? 'Error: Clock out time cannot be before clock in time'
+          : 'Error clocking out: ${e.toString()}';
+      NotificationUtil.showError(context, errorMessage);
     }
   }
 
@@ -189,12 +139,7 @@ class _HomePageState extends State<HomePage>
 
     final existingEntry = HiveDb.getDayEntry(usedTime);
     if (existingEntry != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('This day is already marked.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      NotificationUtil.showWarning(context, 'This day is already marked.');
       return;
     }
 
@@ -229,12 +174,7 @@ class _HomePageState extends State<HomePage>
     if (description != null && mounted) {
       await HiveDb.markOffDay(usedTime, description: description);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$description marked with 8 hours for $dateKey'),
-          backgroundColor: Colors.blue,
-        ),
-      );
+      NotificationUtil.showInfo(context, '$description marked with 8 hours for $dateKey');
 
       setState(() {
         selectedDateTime = null;
@@ -255,157 +195,265 @@ class _HomePageState extends State<HomePage>
         backgroundColor: colorScheme.primary,
         foregroundColor: theme.appBarTheme.foregroundColor,
       ),
-      body: ValueListenableBuilder(
-        valueListenable: HiveDb.getWorkHoursListenable(),
-        builder: (context, Box workHours, _) {
-          // Instead of calling setState here, we'll use the data directly
-          final data = HiveDb.getDayEntry(DateTime.now());
-          final clockInStr = data?['in'];
-          final clockOutStr = data?['out'];
-          
-          final parsedClockIn = clockInStr != null ? DateTime.tryParse(clockInStr) : null;
-          final parsedClockOut = clockOutStr != null ? DateTime.tryParse(clockOutStr) : null;
-          
-          return SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-              children: [
-                // Status Card
-                Card(
-                  margin: const EdgeInsets.all(16),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        Text(
-                          'Today\'s Status',
-                          style: theme.textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 8),
-                        if (parsedClockIn != null)
-                          Text(
-                            'Clocked in at: ${DateFormat.Hm().format(parsedClockIn)}',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        if (parsedClockOut != null)
-                          Text(
-                            'Clocked out at: ${DateFormat.Hm().format(parsedClockOut)}',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
+      // Set SnackBar position to top for the entire Scaffold
+      body: Builder(
+        builder: (context) {
+          return ValueListenableBuilder(
+            valueListenable: HiveDb.getWorkHoursListenable(),
+            builder: (context, Box workHours, _) {
+              // Instead of calling setState here, we'll use the data directly
+              final data = HiveDb.getDayEntry(DateTime.now());
+              final clockInStr = data?['in'];
+              final clockOutStr = data?['out'];
+              
+              final parsedClockIn = clockInStr != null ? DateTime.tryParse(clockInStr) : null;
+              final parsedClockOut = clockOutStr != null ? DateTime.tryParse(clockOutStr) : null;
+              
+              // Get current time for display
+              final now = DateTime.now();
+              final currentTimeString = DateFormat('HH:mm').format(now);
+              final currentDateString = DateFormat('yyyy-MM-dd').format(now);
+              
+              return SafeArea(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                  children: [
 
-                // Time Selection Card
-                Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  child: ListTile(
-                    leading: Icon(Icons.access_time, color: colorScheme.primary),
-                    title: Text(
-                      selectedDateTime == null
-                          ? 'Current Time'
-                          : DateFormat('yyyy-MM-dd HH:mm')
-                              .format(selectedDateTime!),
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                    trailing: Icon(Icons.edit, color: colorScheme.primary),
-                    onTap: _pickDateTime,
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Action Buttons
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: (parsedClockIn == null || (parsedClockIn != null && parsedClockOut != null)) ? _clockIn : null,
-                          icon: const Icon(Icons.login),
-                          label: const Text('Clock In'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.clockIn,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
+                    // Enhanced Time Selection Card
+                    Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.access_time, color: colorScheme.primary, size: 32),
+                                const SizedBox(width: 16),
+                                Text(
+                                  'Time',
+                                  style: theme.textTheme.titleLarge,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            // Current time display
+                            Center(
+                              child: InkWell(
+                                onTap: () async {
+                                  final pickedTime = await showTimePicker(
+                                    context: context,
+                                    initialTime: selectedDateTime != null 
+                                        ? TimeOfDay.fromDateTime(selectedDateTime!)
+                                        : TimeOfDay.now(),
+                                  );
+                                  
+                                  if (pickedTime == null) return;
+                                  
+                                  setState(() {
+                                    if (selectedDateTime == null) {
+                                      // If no date was selected, use today with the selected time
+                                      final now = DateTime.now();
+                                      selectedDateTime = DateTime(
+                                        now.year,
+                                        now.month,
+                                        now.day,
+                                        pickedTime.hour,
+                                        pickedTime.minute,
+                                      );
+                                    } else {
+                                      // Keep the selected date but update the time
+                                      selectedDateTime = DateTime(
+                                        selectedDateTime!.year,
+                                        selectedDateTime!.month,
+                                        selectedDateTime!.day,
+                                        pickedTime.hour,
+                                        pickedTime.minute,
+                                      );
+                                    }
+                                  });
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primaryContainer.withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        selectedDateTime == null ? currentTimeString : DateFormat('HH:mm').format(selectedDateTime!),
+                                        style: theme.textTheme.displayLarge?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          color: colorScheme.primary,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Icon(Icons.edit, color: colorScheme.primary),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            // Date selection
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Date:',
+                                  style: theme.textTheme.titleMedium,
+                                ),
+                                TextButton.icon(
+                                  onPressed: () async {
+                                    final pickedDate = await showDatePicker(
+                                      context: context,
+                                      initialDate: selectedDateTime ?? DateTime.now(),
+                                      firstDate: DateTime(2020),
+                                      lastDate: DateTime(2100),
+                                    );
+                                    
+                                    if (pickedDate == null) return;
+                                    
+                                    final pickedTime = await showTimePicker(
+                                      context: context,
+                                      initialTime: TimeOfDay.fromDateTime(selectedDateTime ?? DateTime.now()),
+                                    );
+                                    
+                                    if (pickedTime == null) return;
+                                    
+                                    setState(() {
+                                      selectedDateTime = DateTime(
+                                        pickedDate.year,
+                                        pickedDate.month,
+                                        pickedDate.day,
+                                        pickedTime.hour,
+                                        pickedTime.minute,
+                                      );
+                                    });
+                                  },
+                                  icon: Icon(Icons.edit, color: colorScheme.primary),
+                                  label: Text(
+                                    selectedDateTime == null ? currentDateString : DateFormat('yyyy-MM-dd').format(selectedDateTime!),
+                                    style: theme.textTheme.bodyLarge,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            // Reset button
+                            if (selectedDateTime != null)
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      selectedDateTime = null;
+                                    });
+                                  },
+                                  child: const Text('Reset to current time'),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: (parsedClockIn != null && parsedClockOut == null) ? _clockOut : null,
-                          icon: const Icon(Icons.logout),
-                          label: const Text('Clock Out'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.clockOut,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Off Day Button
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: ElevatedButton.icon(
-                    onPressed: _markOffDay,
-                    icon: const Icon(
-                      Icons.event_busy,
-                      color: Colors.white,
                     ),
-                    label: const Text('Mark Off Day'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.offDay,
-                      foregroundColor: Colors.white, // Make sure text is readable
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      minimumSize: const Size(double.infinity, 0),
+
+                    const SizedBox(height: 16),
+
+                    // Action Buttons
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: (parsedClockIn == null || (parsedClockIn != null && parsedClockOut != null)) ? _clockIn : null,
+                              icon: const Icon(Icons.login),
+                              label: const Text('Clock In'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.clockIn,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: (parsedClockIn != null && parsedClockOut == null) ? _clockOut : null,
+                              icon: const Icon(Icons.logout),
+                              label: const Text('Clock Out'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.clockOut,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ),
-                SizedBox(
-                  height: 50,
-                ),
-                // Export and Import Buttons
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _exportDataToExcel,
-                          icon: const Icon(Icons.save_alt, color: Colors.white),
-                          label: const Text('Export'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.export,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
+
+                    const SizedBox(height: 16),
+
+                    // Off Day Button
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: ElevatedButton.icon(
+                        onPressed: _markOffDay,
+                        icon: const Icon(
+                          Icons.event_busy,
+                          color: Colors.white,
+                        ),
+                        label: const Text('Mark Off Day'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.offDay,
+                          foregroundColor: Colors.white, // Make sure text is readable
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          minimumSize: const Size(double.infinity, 0),
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _importDataFromExcel,
-                          icon: const Icon(Icons.upload_file, color: Colors.white),
-                          label: const Text('Import'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.import,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    SizedBox(
+                      height: 50,
+                    ),
+                    // Export and Import Buttons
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _exportDataToExcel,
+                              icon: const Icon(Icons.save_alt, color: Colors.white),
+                              label: const Text('Export'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.export,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _importDataFromExcel,
+                              icon: const Icon(Icons.upload_file, color: Colors.white),
+                              label: const Text('Import'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.import,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            },
           );
         },
       ),

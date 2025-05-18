@@ -169,13 +169,9 @@ class _MainPageState extends State<MainPage> {
     final permissionsGranted =
         await PermissionService.checkAndRequestPermissions(context);
     if (!permissionsGranted && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Some features may not work without the required permissions.'),
-          duration: Duration(seconds: 3),
-        ),
-      );
+      NotificationUtil.showWarning(
+          context,
+          'Some features may not work without the required permissions.');
     }
   }
 

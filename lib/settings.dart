@@ -166,67 +166,61 @@ class _SettingsPageState extends State<SettingsPage> {
                       ValueListenableBuilder(
                         valueListenable: HiveDb.getSettingsListenable(),
                         builder: (context, Box settings, _) {
+                          final clockInEnabled = HiveDb.getClockInReminderEnabled();
+                          final clockOutEnabled = HiveDb.getClockOutReminderEnabled();
+                          
                           return Column(
                             children: [
+                              // Clock In Reminder Switch
+                              SwitchListTile(
+                                title: const Text('Clock In Reminders'),
+                                subtitle: Text(
+                                  clockInEnabled ? 'Enabled' : 'Disabled',
+                                ),
+                                value: clockInEnabled,
+                                onChanged: (value) async {
+                                  await HiveDb.setClockInReminderEnabled(value);
+                                  await NotificationService.scheduleNotifications();
+                                },
+                              ),
                               ListTile(
-                                title: const Text('Clock In Reminder'),
+                                title: const Text('Clock In Time'),
                                 subtitle: Text(
                                   'Set to ${HiveDb.getClockInReminderTime().format(context)}',
                                 ),
                                 trailing: const Icon(Icons.access_time),
-                                onTap: () async {
+                                enabled: clockInEnabled,
+                                onTap: clockInEnabled ? () async {
                                   await _selectTime(context, true);
-                                },
+                                } : null,
                               ),
                               const Divider(),
+                              // Clock Out Reminder Switch
+                              SwitchListTile(
+                                title: const Text('Clock Out Reminders'),
+                                subtitle: Text(
+                                  clockOutEnabled ? 'Enabled' : 'Disabled',
+                                ),
+                                value: clockOutEnabled, 
+                                onChanged: (value) async {
+                                  await HiveDb.setClockOutReminderEnabled(value);
+                                  await NotificationService.scheduleNotifications();
+                                },
+                              ),
                               ListTile(
-                                title: const Text('Clock Out Reminder'),
+                                title: const Text('Clock Out Time'),
                                 subtitle: Text(
                                   'Set to ${HiveDb.getClockOutReminderTime().format(context)}',
                                 ),
                                 trailing: const Icon(Icons.access_time),
-                                onTap: () async {
+                                enabled: clockOutEnabled,
+                                onTap: clockOutEnabled ? () async {
                                   await _selectTime(context, false);
-                                },
+                                } : null,
                               ),
                             ],
                           );
                         },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Test Notification Button
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Test Notifications',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          await NotificationService.showTestNotification();
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Test notification sent!'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.notifications),
-                        label: const Text('Send Test Notification'),
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 48),
-                        ),
                       ),
                     ],
                   ),

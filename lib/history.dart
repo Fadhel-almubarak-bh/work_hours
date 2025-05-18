@@ -103,9 +103,7 @@ class _HistoryPageState extends State<HistoryPage> {
         _loadEvents();
       });
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All entries deleted')),
-        );
+        NotificationUtil.showInfo(context, 'All entries deleted');
       }
     }
     return confirmed ?? false;
@@ -136,9 +134,7 @@ class _HistoryPageState extends State<HistoryPage> {
         _loadEvents();
       });
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Entry deleted')),
-        );
+        NotificationUtil.showInfo(context, 'Entry deleted');
       }
     }
     return confirmed ?? false;
@@ -184,9 +180,7 @@ class _HistoryPageState extends State<HistoryPage> {
         _loadEvents();
       });
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Entry updated')),
-        );
+        NotificationUtil.showSuccess(context, 'Entry updated');
       }
     }
   }

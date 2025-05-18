@@ -419,6 +419,24 @@
       }
     }
 
+    static bool getClockInReminderEnabled() {
+      try {
+        return _settingsBox.get('clockInReminderEnabled', defaultValue: true);
+      } catch (e) {
+        debugPrint('Error in getClockInReminderEnabled: $e');
+        return true;
+      }
+    }
+
+    static Future<void> setClockInReminderEnabled(bool enabled) async {
+      try {
+        await _settingsBox.put('clockInReminderEnabled', enabled);
+      } catch (e) {
+        debugPrint('Error in setClockInReminderEnabled: $e');
+        rethrow;
+      }
+    }
+
     static TimeOfDay getClockOutReminderTime() {
       try {
         final hour = _settingsBox.get('clockOutReminderHour', defaultValue: 17);
@@ -437,6 +455,24 @@
         await _settingsBox.put('clockOutReminderMinute', time.minute);
       } catch (e) {
         debugPrint('Error in setClockOutReminderTime: $e');
+        rethrow;
+      }
+    }
+
+    static bool getClockOutReminderEnabled() {
+      try {
+        return _settingsBox.get('clockOutReminderEnabled', defaultValue: true);
+      } catch (e) {
+        debugPrint('Error in getClockOutReminderEnabled: $e');
+        return true;
+      }
+    }
+
+    static Future<void> setClockOutReminderEnabled(bool enabled) async {
+      try {
+        await _settingsBox.put('clockOutReminderEnabled', enabled);
+      } catch (e) {
+        debugPrint('Error in setClockOutReminderEnabled: $e');
         rethrow;
       }
     }

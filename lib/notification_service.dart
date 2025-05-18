@@ -74,27 +74,39 @@ class NotificationService {
 
     // Schedule clock in reminder
     final clockInTime = HiveDb.getClockInReminderTime();
-    debugPrint('Clock in reminder time: ${_formatTimeOfDay(clockInTime)}');
-    await _scheduleWorkDayNotifications(
-      id: 1,
-      title: 'Time to Clock In',
-      body: 'Don\'t forget to clock in for your work day!',
-      hour: clockInTime.hour,
-      minute: clockInTime.minute,
-      workDays: workDays,
-    );
+    final clockInEnabled = HiveDb.getClockInReminderEnabled();
+    debugPrint('Clock in reminder time: ${_formatTimeOfDay(clockInTime)}, enabled: $clockInEnabled');
+    
+    if (clockInEnabled) {
+      await _scheduleWorkDayNotifications(
+        id: 1,
+        title: 'Time to Clock In',
+        body: 'Don\'t forget to clock in for your work day!',
+        hour: clockInTime.hour,
+        minute: clockInTime.minute,
+        workDays: workDays,
+      );
+    } else {
+      debugPrint('Clock in reminders are disabled, skipping scheduling');
+    }
 
     // Schedule clock out reminder
     final clockOutTime = HiveDb.getClockOutReminderTime();
-    debugPrint('Clock out reminder time: ${_formatTimeOfDay(clockOutTime)}');
-    await _scheduleWorkDayNotifications(
-      id: 2,
-      title: 'Time to Clock Out',
-      body: 'Don\'t forget to clock out for your work day!',
-      hour: clockOutTime.hour,
-      minute: clockOutTime.minute,
-      workDays: workDays,
-    );
+    final clockOutEnabled = HiveDb.getClockOutReminderEnabled();
+    debugPrint('Clock out reminder time: ${_formatTimeOfDay(clockOutTime)}, enabled: $clockOutEnabled');
+    
+    if (clockOutEnabled) {
+      await _scheduleWorkDayNotifications(
+        id: 2,
+        title: 'Time to Clock Out',
+        body: 'Don\'t forget to clock out for your work day!',
+        hour: clockOutTime.hour,
+        minute: clockOutTime.minute,
+        workDays: workDays,
+      );
+    } else {
+      debugPrint('Clock out reminders are disabled, skipping scheduling');
+    }
   }
 
   static String _formatTimeOfDay(TimeOfDay time) {

@@ -1,5 +1,99 @@
 import 'package:flutter/material.dart';
 
+// Notification utility class for app-wide consistent notifications
+// class NotificationUtil {
+//   // Show a notification at the top of the screen
+//   static void showTopSnackBar(
+//     BuildContext context,
+//     String message, {
+//     Color backgroundColor = AppColors.successLight,
+//     Duration duration = const Duration(seconds: 3),
+//     SnackBarAction? action,
+//   }) {
+//     ScaffoldMessenger.of(context).showSnackBar(
+//       SnackBar(
+//         content: Text(message),
+//         backgroundColor: backgroundColor,
+//         behavior: SnackBarBehavior.floating,
+//         margin: const EdgeInsets.only(top: 8.0, left: 8.0, right: 8.0),
+//         elevation: 6.0,
+//         duration: duration,
+//         action: action,
+//       ),
+//     );
+//   }
+//
+//   // Helper methods for common notification types
+//   static void showSuccess(BuildContext context, String message) {
+//     showTopSnackBar(context, message, backgroundColor: AppColors.successLight);
+//   }
+//
+//   static void showError(BuildContext context, String message) {
+//     showTopSnackBar(context, message, backgroundColor: AppColors.errorLight);
+//   }
+//
+//   static void showWarning(BuildContext context, String message) {
+//     showTopSnackBar(context, message, backgroundColor: AppColors.warningLight);
+//   }
+//
+//   static void showInfo(BuildContext context, String message) {
+//     showTopSnackBar(context, message, backgroundColor: AppColors.infoLight);
+//   }
+// }
+class NotificationUtil {
+  static void showTopOverlay(
+      BuildContext context,
+      String message, {
+        Color backgroundColor = Colors.green,
+        Duration duration = const Duration(seconds: 3),
+      }) {
+    final overlay = Overlay.of(context);
+    final overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).viewPadding.top + kToolbarHeight + 8,
+        left: 16,
+        right: 16,
+        child: Material(
+          elevation: 6,
+          borderRadius: BorderRadius.circular(8),
+          color: backgroundColor,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Text(
+              message,
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(overlayEntry);
+
+    Future.delayed(duration, () {
+      overlayEntry.remove();
+    });
+  }
+
+  // Convenience wrappers
+  static void showSuccess(BuildContext context, String message) {
+    showTopOverlay(context, message, backgroundColor: Colors.green);
+  }
+
+  static void showError(BuildContext context, String message) {
+    showTopOverlay(context, message, backgroundColor: Colors.red);
+  }
+
+  static void showWarning(BuildContext context, String message) {
+    showTopOverlay(context, message, backgroundColor: Colors.orange);
+  }
+
+  static void showInfo(BuildContext context, String message) {
+    showTopOverlay(context, message, backgroundColor: Colors.blue);
+  }
+}
+
+
 class AppColors {
   // Light Theme Colors
   static const Color primaryLight = Color(0xFF2196F3);
