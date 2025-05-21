@@ -81,11 +81,26 @@ class _SettingsPageState extends State<SettingsPage> {
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Text(
-                        'Work Days',
-                        style: Theme.of(context).textTheme.titleLarge,
+                      child: Row(
+                        children: [
+                          Icon(Icons.calendar_today, 
+                              color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Work Days',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ],
                       ),
                     ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Text(
+                        'Select the days that you normally work. This affects overtime calculations.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     ValueListenableBuilder(
                       valueListenable: HiveDb.getSettingsListenable(),
                       builder: (context, Box settings, _) {
@@ -94,16 +109,30 @@ class _SettingsPageState extends State<SettingsPage> {
                           children: [
                             for (var i = 0; i < 7; i++)
                               CheckboxListTile(
-                                title: Text(_getDayName(i)),
+                                title: Text(_getDayName(i), 
+                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    fontWeight: workDays[i] ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                ),
+                                subtitle: workDays[i] 
+                                  ? Text('Set as a work day', 
+                                      style: TextStyle(color: Theme.of(context).colorScheme.primary))
+                                  : null,
+                                activeColor: Theme.of(context).colorScheme.primary,
+                                checkColor: Theme.of(context).colorScheme.onPrimary,
                                 value: workDays[i],
                                 onChanged: (value) {
                                   if (value != null) {
-                                    final newWorkDays =
-                                        List<bool>.from(workDays);
-                                    newWorkDays[i] = value;
-                                    debugPrint('🔧 [SETTINGS] Changing work day ${_getDayName(i)} to $value');
-                                    debugPrint('🔧 [SETTINGS] New work days array: $newWorkDays');
-                                    HiveDb.setWorkDays(newWorkDays);
+                                    // Show confirmation dialog if unchecking a work day
+                                    if (workDays[i] && value == false) {
+                                      _confirmWorkDayChange(context, i, value);
+                                    } else {
+                                      final newWorkDays = List<bool>.from(workDays);
+                                      newWorkDays[i] = value;
+                                      debugPrint('🔧 [SETTINGS] Changing work day ${_getDayName(i)} to $value');
+                                      debugPrint('🔧 [SETTINGS] New work days array: $newWorkDays');
+                                      HiveDb.setWorkDays(newWorkDays);
+                                    }
                                   }
                                 },
                               ),
@@ -123,27 +152,92 @@ class _SettingsPageState extends State<SettingsPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Daily Target Hours',
-                        style: Theme.of(context).textTheme.titleLarge,
+                      Row(
+                        children: [
+                          Icon(Icons.access_time_filled, 
+                              color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Daily Target Hours',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      Slider(
-                        value: _dailyTargetHours.toDouble(),
-                        min: 0,
-                        max: 24,
-                        divisions: 48,
-                        label: '$_dailyTargetHours hours',
-                        onChanged: (value) {
-                          setState(() {
-                            _dailyTargetHours = value.round();
-                          });
-                          HiveDb.setDailyTargetHours(_dailyTargetHours);
-                        },
-                      ),
+                      const SizedBox(height: 12),
                       Text(
-                        '$_dailyTargetHours hours per day',
-                        style: Theme.of(context).textTheme.bodyLarge,
+                        'Set your standard working hours per day. This affects overtime calculations.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // Simplified hour selector with just +/- buttons
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceVariant,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Decrement button
+                            IconButton(
+                              onPressed: () {
+                                final currentHours = HiveDb.getDailyTargetHours();
+                                if (currentHours > 1) {
+                                  final newHours = currentHours - 1;
+                                  HiveDb.setDailyTargetHours(newHours);
+                                  setState(() {
+                                    _dailyTargetHours = newHours;
+                                  });
+                                }
+                              },
+                              icon: Icon(
+                                Icons.remove_circle,
+                                color: Theme.of(context).colorScheme.primary,
+                                size: 36,
+                              ),
+                            ),
+                            
+                            // Current value display
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primaryContainer,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${HiveDb.getDailyTargetHours()}',
+                                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            
+                            // Increment button
+                            IconButton(
+                              onPressed: () {
+                                final currentHours = HiveDb.getDailyTargetHours();
+                                if (currentHours < 24) {
+                                  final newHours = currentHours + 1;
+                                  HiveDb.setDailyTargetHours(newHours);
+                                  setState(() {
+                                    _dailyTargetHours = newHours;
+                                  });
+                                }
+                              },
+                              icon: Icon(
+                                Icons.add_circle,
+                                color: Theme.of(context).colorScheme.primary,
+                                size: 36,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -255,5 +349,38 @@ class _SettingsPageState extends State<SettingsPage> {
       default:
         return '';
     }
+  }
+
+  void _confirmWorkDayChange(BuildContext context, int index, bool value) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Confirm Work Day Change'),
+          content: Text(
+            'Are you sure you want to remove ${_getDayName(index)} from your work days?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                final newWorkDays = List<bool>.from(_workDays);
+                newWorkDays[index] = value;
+                debugPrint('🔧 [SETTINGS] Changing work day ${_getDayName(index)} to $value');
+                debugPrint('🔧 [SETTINGS] New work days array: $newWorkDays');
+                HiveDb.setWorkDays(newWorkDays);
+                Navigator.of(context).pop();
+              },
+              child: const Text('Yes'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('No'),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

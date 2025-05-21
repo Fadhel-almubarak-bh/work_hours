@@ -12,6 +12,7 @@
 -   [Contributing](#contributing)
 -   [License](#license)
 -   [Contact](#contact)
+-   [Widget Functionality](#widget-functionality)
 
 ## About
 

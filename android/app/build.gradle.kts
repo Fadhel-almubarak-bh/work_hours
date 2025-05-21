@@ -16,6 +16,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
+    lint {
+        baseline = file("lint-baseline.xml")
+    }
+
+
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_11.toString()
     }

@@ -32,14 +32,14 @@ class ChartData {
   ChartData(this.x, this.y, this.color);
 }
 
-class SummaryPage extends StatefulWidget {
-  const SummaryPage({super.key});
+class SalaryPage extends StatefulWidget {
+  const SalaryPage({super.key});
 
   @override
-  State<SummaryPage> createState() => _SummaryPageState();
+  State<SalaryPage> createState() => _SalaryPageState();
 }
 
-class _SummaryPageState extends State<SummaryPage> {
+class _SalaryPageState extends State<SalaryPage> {
   bool _isCalculating = false;
   Future<Map<String, dynamic>>? _summaryFuture;
 
@@ -1709,70 +1709,11 @@ class _SummaryPageState extends State<SummaryPage> {
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: const Text('Summary'),
+        title: const Text('Salary'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _isCalculating ? null : _refreshSummary,
-            tooltip: 'Refresh Summary',
-          ),
         ],
       ),
-      body: ValueListenableBuilder(
-        valueListenable: HiveDb.getWorkHoursListenable(),
-        builder: (context, Box workHours, _) {
-          return ValueListenableBuilder(
-            valueListenable: HiveDb.getSettingsListenable(),
-            builder: (context, Box settings, _) {
-              return FutureBuilder<Map<String, dynamic>>(
-                future: _summaryFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  final summary = snapshot.data ?? {};
-
-                  // Get the current and last month periods for subtitles
-                  final now = DateTime.now();
-                  final lastMonth = DateTime(now.year, now.month - 1, 1);
-                  final lastMonthName =
-                      DateFormat('MMMM yyyy').format(lastMonth);
-
-                  return SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                          16, 16, 16, 100), // Bottom 100
-                      child: Column(
-                        children: [
-                          // Today's progress card with animation
-                          _buildTodayProgressCard(),
-                          const SizedBox(height: 24),
-
-                          // Overtime gauge chart
-                          _buildOvertimeGaugeCard(summary),
-                          const SizedBox(height: 24),
-
-                          // Monthly trend chart
-                          _buildMonthlyTrendChart(summary),
-                          const SizedBox(height: 24),
-
-                          // Weekly bar chart
-                          _buildWeeklyBarChart(),
-                          const SizedBox(height: 24),
-
-                          // Last Month Summary with pie chart
-                          _buildLastMonthSummaryCard(summary, lastMonthName),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          );
-        },
-      ),
+      body: null,
     );
   }
 
