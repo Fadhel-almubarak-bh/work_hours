@@ -73,6 +73,113 @@ class _SalaryPageState extends State<SalaryPage> {
       // Get entries for the current month
       final entries = HiveDb.getEntriesForRange(monthStart, now);
       
+      // Get work days configuration and daily hours
+      final workDays = HiveDb.getWorkDays();
+      final dailyHours = HiveDb.getDailyTargetHours();
+      final monthlySalary = HiveDb.getMonthlySalary();
+      
+      // Debug print all months data
+      debugPrint('\n📊 [SALARY PAGE] All Months Data:');
+      debugPrint('==========================================');
+      
+      // Get all entries
+      final allEntries = HiveDb.getAllEntries();
+      
+      // Group entries by month
+      Map<String, List<MapEntry<String, dynamic>>> monthlyEntries = {};
+      allEntries.forEach((key, value) {
+        final date = DateTime.parse(key);
+        final monthKey = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+        if (!monthlyEntries.containsKey(monthKey)) {
+          monthlyEntries[monthKey] = [];
+        }
+        monthlyEntries[monthKey]!.add(MapEntry(key, value));
+      });
+      
+      // Sort months
+      final sortedMonths = monthlyEntries.keys.toList()..sort();
+      
+      // Process each month
+      for (final monthKey in sortedMonths) {
+        final monthEntries = monthlyEntries[monthKey]!;
+        final monthDate = DateTime.parse('$monthKey-01');
+        final monthStart = DateTime(monthDate.year, monthDate.month, 1);
+        final monthEnd = DateTime(monthDate.year, monthDate.month + 1, 0);
+        
+        // Calculate weekends for this month
+        int weekendDays = 0;
+        for (var day = monthStart; day.isBefore(monthEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+          if (!workDays[day.weekday - 1]) {
+            weekendDays++;
+          }
+        }
+        
+        // Calculate off days for this month
+        int offDaysCount = 0;
+        for (var entry in monthEntries) {
+          if (entry.value['offDay'] == true) {
+            offDaysCount++;
+          }
+        }
+        
+        // Calculate expected work days
+        int expectedWorkDays = 0;
+        for (var day = monthStart; day.isBefore(monthEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+          if (workDays[day.weekday - 1]) {
+            expectedWorkDays++;
+          }
+        }
+        
+        // Calculate actual minutes
+        int actualMinutes = 0;
+        for (var entry in monthEntries) {
+          if (entry.value['duration'] != null) {
+            actualMinutes += (entry.value['duration'] as num).toInt();
+          }
+        }
+        
+        // Calculate rates
+        final expectedMinutes = expectedWorkDays * dailyHours * 60;
+        final overtimeMinutes = actualMinutes - expectedMinutes;
+        final dailyRate = expectedWorkDays > 0 ? monthlySalary / expectedWorkDays : 0.0;
+        final hourlyRate = dailyHours > 0 ? dailyRate / dailyHours : 0.0;
+        final overtimePay = overtimeMinutes > 0 && hourlyRate > 0 ? (overtimeMinutes / 60) * hourlyRate * 1.5 : 0.0;
+        final totalEarnings = hourlyRate > 0 ? (actualMinutes / 60) * hourlyRate : 0.0;
+        final earningsAfterInsurance = totalEarnings > 0 ? totalEarnings * 0.92 : 0.0;
+        
+        // Print month data
+        debugPrint('\n📅 Month: ${DateFormat('MMMM yyyy').format(monthStart)}');
+        debugPrint('----------------------');
+        debugPrint('Total Days: ${monthEnd.day}');
+        debugPrint('Expected Work Days: $expectedWorkDays');
+        debugPrint('Non-working Days: $weekendDays');
+        debugPrint('Off Days (Excused): $offDaysCount');
+        debugPrint('Total Days Off: ${weekendDays + offDaysCount}');
+        debugPrint('Actual Minutes: $actualMinutes');
+        debugPrint('Expected Minutes: $expectedMinutes');
+        debugPrint('Overtime Minutes: $overtimeMinutes');
+        debugPrint('Daily Rate: ${formatCurrency(dailyRate.toDouble())}');
+        debugPrint('Hourly Rate: ${formatCurrency(hourlyRate.toDouble())}');
+        debugPrint('Overtime Pay: ${formatCurrency(overtimePay.toDouble())}');
+        debugPrint('Total Earnings: ${formatCurrency(totalEarnings.toDouble())}');
+        debugPrint('After Insurance: ${formatCurrency(earningsAfterInsurance.toDouble())}');
+        debugPrint('----------------------');
+      }
+      
+      debugPrint('\n==========================================\n');
+      
+      // Continue with current month calculations for the UI
+      final currentMonthStart = DateTime(now.year, now.month, 1);
+      final currentMonthEnd = DateTime(now.year, now.month + 1, 0);
+      
+      // Calculate weekends for current month
+      int weekendDays = 0;
+      for (var day = currentMonthStart; day.isBefore(currentMonthEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+        if (!workDays[day.weekday - 1]) {
+          weekendDays++;
+        }
+      }
+      
       // Calculate off days count
       int offDaysCount = 0;
       for (var entry in entries) {
@@ -81,23 +188,24 @@ class _SalaryPageState extends State<SalaryPage> {
         }
       }
       
-      // Get stats for the month
-      final monthStats = HiveDb.getStatsForRange(monthStart, now);
-      
-      // Get work days configuration
-      final workDays = HiveDb.getWorkDays();
-      final dailyHours = HiveDb.getDailyTargetHours();
-      
-      // Calculate expected work days in the month
+      // Calculate expected work days
       int expectedWorkDays = 0;
-      for (var day = monthStart; day.isBefore(monthEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+      for (var day = currentMonthStart; day.isBefore(currentMonthEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
         if (workDays[day.weekday - 1]) {
           expectedWorkDays++;
         }
       }
       
-      // Calculate expected minutes for the month
-      final expectedMinutes = expectedWorkDays * dailyHours * 60;
+      // Get stats for the month
+      final monthStats = HiveDb.getStatsForRange(currentMonthStart, now);
+      
+      // Calculate expected minutes for the month (only for days up to today)
+      int expectedMinutes = 0;
+      for (var day = currentMonthStart; day.isBefore(now.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+        if (workDays[day.weekday - 1]) {
+          expectedMinutes += dailyHours * 60;
+        }
+      }
       
       // Calculate actual minutes worked
       final actualMinutes = monthStats['totalMinutes'] as int;
@@ -106,28 +214,63 @@ class _SalaryPageState extends State<SalaryPage> {
       final overtimeMinutes = actualMinutes - expectedMinutes;
       
       // Calculate daily and hourly rates
-      final monthlySalary = HiveDb.getMonthlySalary();
-      final dailyRate = monthlySalary / expectedWorkDays;
-      final hourlyRate = dailyRate / dailyHours;
+      final dailyRate = expectedWorkDays > 0 ? monthlySalary / expectedWorkDays : 0.0;
+      final hourlyRate = dailyHours > 0 ? dailyRate / dailyHours : 0.0;
       
-      // Calculate overtime pay
-      final overtimeHours = overtimeMinutes / 60;
-      final overtimePay = overtimeMinutes > 0 ? (overtimeHours * hourlyRate * 1.5) : 0;
+      // Calculate overtime pay (only for positive overtime)
+      final overtimeHours = overtimeMinutes > 0 ? overtimeMinutes / 60 : 0;
+      final overtimePay = overtimeMinutes > 0 && hourlyRate > 0 ? (overtimeHours * hourlyRate * 1.5) : 0.0;
       
       // Calculate total earnings
-      double totalEarnings = 0;
-      for (var entry in entries) {
-        int minutes = 0;
-        if (entry['offDay'] == true) {
-          minutes = HiveDb.getDailyTargetMinutes();
-        } else if (entry['duration'] != null) {
-          minutes = (entry['duration'] as num).toInt();
+      double totalEarnings = 0.0;
+      if (hourlyRate > 0) {
+        for (var entry in entries) {
+          int minutes = 0;
+          if (entry['offDay'] == true) {
+            minutes = HiveDb.getDailyTargetMinutes();
+          } else if (entry['duration'] != null) {
+            minutes = (entry['duration'] as num).toInt();
+          }
+          totalEarnings += (minutes / 60) * hourlyRate;
         }
-        totalEarnings += (minutes / 60) * hourlyRate;
       }
       
       // Calculate earnings after insurance
-      final earningsAfterInsurance = totalEarnings * 0.92;
+      final earningsAfterInsurance = totalEarnings > 0 ? totalEarnings * 0.92 : 0.0;
+      
+      // Calculate today's earnings
+      double todayEarnings = 0.0;
+      if (hourlyRate > 0) {
+        final todayEntry = HiveDb.getDayEntry(now);
+        if (todayEntry != null) {
+          int todayMinutes = 0;
+          if (todayEntry['offDay'] == true) {
+            todayMinutes = HiveDb.getDailyTargetMinutes();
+          } else if (todayEntry['duration'] != null) {
+            todayMinutes = (todayEntry['duration'] as num).toInt();
+          } else if (todayEntry['in'] != null && todayEntry['out'] == null) {
+            final clockInTime = DateTime.parse(todayEntry['in']);
+            todayMinutes = now.difference(clockInTime).inMinutes;
+          }
+          todayEarnings = (todayMinutes / 60) * hourlyRate;
+        }
+      }
+      
+      // Debug print salary calculations
+      debugPrint('\n💰 [SALARY PAGE] Salary Calculations:');
+      debugPrint('----------------------');
+      debugPrint('Monthly Salary: $monthlySalary');
+      debugPrint('Expected Work Days: $expectedWorkDays');
+      debugPrint('Daily Hours: $dailyHours');
+      debugPrint('Daily Rate: $dailyRate');
+      debugPrint('Hourly Rate: $hourlyRate');
+      debugPrint('Actual Minutes: $actualMinutes');
+      debugPrint('Expected Minutes: $expectedMinutes');
+      debugPrint('Overtime Minutes: $overtimeMinutes');
+      debugPrint('Overtime Pay: $overtimePay');
+      debugPrint('Total Earnings: $totalEarnings');
+      debugPrint('After Insurance: $earningsAfterInsurance');
+      debugPrint('----------------------\n');
       
       return {
         'monthlyTotal': actualMinutes,
@@ -137,8 +280,8 @@ class _SalaryPageState extends State<SalaryPage> {
         'currentMonthExpectedMinutes': expectedMinutes,
         'lastMonthExpectedMinutes': 0,
         'offDaysCount': offDaysCount,
-        'nonWorkingDaysCount': monthStats['nonWorkingDays'] as int,
-        'totalDaysOff': monthStats['totalDaysOff'] as int,
+        'nonWorkingDaysCount': weekendDays,
+        'totalDaysOff': weekendDays + offDaysCount,
         'dailyRate': dailyRate,
         'hourlyRate': hourlyRate,
         'overtimePay': overtimePay,
@@ -147,6 +290,7 @@ class _SalaryPageState extends State<SalaryPage> {
         'expectedHours': expectedWorkDays * dailyHours,
         'workDaysCount': expectedWorkDays,
         'dailyHours': dailyHours,
+        'todayEarnings': todayEarnings,
       };
     } catch (e) {
       debugPrint('Error calculating summary: $e');
@@ -169,6 +313,7 @@ class _SalaryPageState extends State<SalaryPage> {
   }
 
   String formatCurrency(double amount) {
+    if (amount.isInfinite || amount.isNaN) return '0.000 BHD';
     return NumberFormat.currency(symbol: 'BHD ', decimalDigits: 3).format(amount);
   }
 
@@ -218,83 +363,24 @@ class _SalaryPageState extends State<SalaryPage> {
               final monthlySalary = HiveDb.getMonthlySalary();
               
               // Calculate the hourly rate based on expected working minutes
-              double hourlyRate = 0;
-              double dailyRate = 0;
-              if (currentMonthExpectedMinutes > 0 && monthlySalary > 0) {
-                // Get work days for the current month
-                final workDays = HiveDb.getWorkDays();
-                final now = DateTime.now();
-                final monthStart = DateTime(now.year, now.month, 1);
-                final monthEnd = DateTime(now.year, now.month + 1, 0);
-                
-                // Count actual work days in the month
-                int actualWorkDaysInMonth = 0;
-                for (var day = monthStart; day.isBefore(monthEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
-                  if (workDays[day.weekday - 1]) {
-                    actualWorkDaysInMonth++;
-                  }
-                }
-                
-                // Calculate daily rate based on actual work days
-                dailyRate = monthlySalary / actualWorkDaysInMonth;
-                
-                // Calculate hourly rate
-                final dailyHours = HiveDb.getDailyTargetHours();
-                hourlyRate = dailyRate / dailyHours;
+              double hourlyRate = summary['hourlyRate'] ?? 0.0;
+              double dailyRate = summary['dailyRate'] ?? 0.0;
+              double overtimePay = summary['overtimePay'] ?? 0.0;
+              double totalEarnings = summary['totalEarnings'] ?? 0.0;
+              double earningsAfterInsurance = summary['earningsAfterInsurance'] ?? 0.0;
+              int workDaysCount = summary['workDaysCount'] ?? 0;
+              int expectedHours = summary['expectedHours'] ?? 0;
+              int dailyHours = summary['dailyHours'] ?? 0;
+              double todayEarnings = summary['todayEarnings'] ?? 0.0;
 
-                // Calculate expected hours for the month
-                int workDaysCount = 0;
-                for (var day = monthStart; day.isBefore(monthEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
-                  if (workDays[day.weekday - 1]) {
-                    workDaysCount++;
-                  }
-                }
-                final expectedHours = workDaysCount * dailyHours;
-
-                // Calculate the overtime pay (assuming 1.5x for overtime)
-                overtimePay = 0;
-                if (overtimeMinutes > 0 && hourlyRate > 0) {
-                  overtimePay = (overtimeMinutes / 60) * hourlyRate * 1.5;
-                }
-
-                // Calculate today's earnings
-                todayEarnings = 0;
-                if (hourlyRate > 0) {
-                  final todayEntry = HiveDb.getDayEntry(now);
-                  if (todayEntry != null) {
-                    int todayMinutes = 0;
-                    if (todayEntry['offDay'] == true) {
-                      todayMinutes = HiveDb.getDailyTargetMinutes();
-                    } else if (todayEntry['duration'] != null) {
-                      todayMinutes = (todayEntry['duration'] as num).toInt();
-                    } else if (todayEntry['in'] != null && todayEntry['out'] == null) {
-                      final clockInTime = DateTime.parse(todayEntry['in']);
-                      todayMinutes = now.difference(clockInTime).inMinutes;
-                    }
-                    todayEarnings = (todayMinutes / 60) * hourlyRate;
-                  }
-                }
-
-                // Calculate total earnings including all days
-                totalEarnings = 0;
-                if (hourlyRate > 0) {
-                  // Get all entries for the current month
-                  final entries = HiveDb.getEntriesForRange(monthStart, monthEnd);
-
-                  for (var entry in entries) {
-                    int minutes = 0;
-                    if (entry['offDay'] == true) {
-                      minutes = HiveDb.getDailyTargetMinutes();
-                    } else if (entry['duration'] != null) {
-                      minutes = (entry['duration'] as num).toInt();
-                    }
-                    totalEarnings += (minutes / 60) * hourlyRate;
-                  }
-                }
-
-                // Calculate earnings after insurance (92% of total)
-                earningsAfterInsurance = totalEarnings * 0.92;
-              }
+              // Debug print today's entry
+              final todayEntry = HiveDb.getDayEntry(now);
+              debugPrint('\n📅 [SALARY PAGE] Today\'s Entry:');
+              debugPrint('----------------------');
+              debugPrint('Entry: $todayEntry');
+              debugPrint('Hourly Rate: $hourlyRate');
+              debugPrint('Today\'s Earnings: $todayEarnings');
+              debugPrint('----------------------\n');
 
               return ListView(
                 padding: const EdgeInsets.all(16.0),
@@ -376,7 +462,7 @@ class _SalaryPageState extends State<SalaryPage> {
                           const SizedBox(height: 8),
                           _buildSalaryInfoRow(
                             'Expected Hours:',
-                            '${summary['expectedHours']} hours (${summary['workDaysCount']} days × ${summary['dailyHours']}h)',
+                            '${expectedHours} hours (${workDaysCount} days × ${dailyHours}h)',
                           ),
                           const SizedBox(height: 8),
                           _buildSalaryInfoRow(
@@ -431,13 +517,13 @@ class _SalaryPageState extends State<SalaryPage> {
                           const SizedBox(height: 8),
                           _buildSalaryInfoRow(
                             'Hours Worked:',
-                            formatDuration(monthlyTotal),
+                            '${(summary['monthlyTotal'] ?? 0) ~/ 60}h ${(summary['monthlyTotal'] ?? 0) % 60}m',
                           ),
                           const SizedBox(height: 8),
                           _buildSalaryInfoRow(
                             'Hours Left to Do:',
-                            formatDuration(-overtimeMinutes),
-                            textColor: overtimeMinutes < 0 ? Colors.orange : Colors.green,
+                            '${((summary['currentMonthExpectedMinutes'] ?? 0) - (summary['monthlyTotal'] ?? 0)) ~/ 60}h ${((summary['currentMonthExpectedMinutes'] ?? 0) - (summary['monthlyTotal'] ?? 0)).abs() % 60}m',
+                            textColor: ((summary['currentMonthExpectedMinutes'] ?? 0) - (summary['monthlyTotal'] ?? 0)) < 0 ? Colors.green : Colors.orange,
                           ),
                         ],
                       ),
