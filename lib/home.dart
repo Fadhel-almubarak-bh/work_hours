@@ -667,42 +667,6 @@ class _HomePageState extends State<HomePage>
                         ),
                       ),
                     ),
-                    SizedBox(
-                      height: 50,
-                    ),
-                    // Export and Import Buttons
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: _exportDataToExcel,
-                              icon: const Icon(Icons.save_alt, color: Colors.white),
-                              label: const Text('Export'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.export,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: _importDataFromExcel,
-                              icon: const Icon(Icons.upload_file, color: Colors.white),
-                              label: const Text('Import'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.import,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               );
@@ -711,6 +675,142 @@ class _HomePageState extends State<HomePage>
         },
       ),
     );
+  }
+
+  void _printDebugInfo() {
+    debugPrint('\n🔍 [DEBUG] Printing Work Hours Database Info');
+    debugPrint('==========================================');
+    
+    // Print work hours data
+    final workHoursBox = Hive.box('work_hours');
+    final allEntries = workHoursBox.toMap();
+    
+    debugPrint('\n📊 Work Hours Entries:');
+    debugPrint('----------------------');
+    allEntries.forEach((key, value) {
+      debugPrint('Date: $key');
+      debugPrint('Data: $value');
+      debugPrint('----------------------');
+    });
+
+    // Print settings data
+    final settingsBox = Hive.box('settings');
+    debugPrint('\n⚙️ Settings:');
+    debugPrint('----------------------');
+    
+    // Print work days
+    final workDays = HiveDb.getWorkDays();
+    debugPrint('Work Days:');
+    for (var i = 0; i < 7; i++) {
+      final dayName = _getDayName(i);
+      debugPrint('$dayName: ${workDays[i]}');
+    }
+    
+    // Print daily target hours
+    final dailyTargetHours = HiveDb.getDailyTargetHours();
+    debugPrint('\nDaily Target Hours: $dailyTargetHours');
+    
+    // Print monthly salary
+    final monthlySalary = HiveDb.getMonthlySalary();
+    debugPrint('Monthly Salary: $monthlySalary');
+
+    // Print Salary Calculations
+    debugPrint('\n💰 Salary Calculations:');
+    debugPrint('----------------------');
+    
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1);
+    final monthEnd = DateTime(now.year, now.month + 1, 0);
+    
+    // Calculate work days count
+    int workDaysCount = 0;
+    for (var day = monthStart; day.isBefore(monthEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+      if (workDays[day.weekday - 1]) {
+        workDaysCount++;
+      }
+    }
+    
+    // Calculate daily and hourly rates based on actual work days
+    final dailyRate = monthlySalary / workDaysCount;
+    final hourlyRate = dailyRate / dailyTargetHours;
+    
+    debugPrint('Work Days in Month: $workDaysCount');
+    debugPrint('Daily Rate: $dailyRate');
+    debugPrint('Hourly Rate: $hourlyRate');
+    
+    // Calculate overtime
+    final overtimeMinutes = HiveDb.getMonthlyOvertime();
+    final overtimeHours = overtimeMinutes / 60;
+    final overtimePay = overtimeMinutes > 0 ? (overtimeHours * hourlyRate * 1.5) : 0;
+    
+    debugPrint('\nOvertime:');
+    debugPrint('Hours: $overtimeHours');
+    debugPrint('Pay: $overtimePay');
+    
+    // Calculate total earnings
+    double totalEarnings = 0;
+    final entries = HiveDb.getEntriesForRange(monthStart, monthEnd);
+    
+    for (var entry in entries) {
+      int minutes = 0;
+      if (entry['offDay'] == true) {
+        minutes = HiveDb.getDailyTargetMinutes();
+      } else if (entry['duration'] != null) {
+        minutes = (entry['duration'] as num).toInt();
+      }
+      totalEarnings += (minutes / 60) * hourlyRate;
+    }
+    
+    final earningsAfterInsurance = totalEarnings * 0.92;
+    
+    debugPrint('\nEarnings:');
+    debugPrint('Total: $totalEarnings');
+    debugPrint('After Insurance (92%): $earningsAfterInsurance');
+    
+    // Print Summary Statistics
+    debugPrint('\n📈 Summary Statistics:');
+    debugPrint('----------------------');
+    
+    final monthStats = HiveDb.getStatsForRange(monthStart, now);
+    final lastMonthStart = DateTime(now.year, now.month - 1, 1);
+    final lastMonthEnd = DateTime(now.year, now.month, 0);
+    final lastMonthStats = HiveDb.getStatsForRange(lastMonthStart, lastMonthEnd);
+    
+    debugPrint('Current Month:');
+    debugPrint('Total Minutes: ${monthStats['totalMinutes']}');
+    debugPrint('Work Days: ${monthStats['workDays']}');
+    debugPrint('Off Days: ${monthStats['offDays']}');
+    
+    debugPrint('\nLast Month:');
+    debugPrint('Total Minutes: ${lastMonthStats['totalMinutes']}');
+    debugPrint('Work Days: ${lastMonthStats['workDays']}');
+    debugPrint('Off Days: ${lastMonthStats['offDays']}');
+    
+    // Print expected vs actual hours
+    final currentMonthExpectedMinutes = HiveDb.getCurrentMonthExpectedMinutes();
+    final actualMinutes = monthStats['totalMinutes'] as int;
+    final expectedHours = currentMonthExpectedMinutes / 60;
+    final actualHours = actualMinutes / 60;
+    
+    debugPrint('\nExpected vs Actual:');
+    debugPrint('Expected Hours: $expectedHours');
+    debugPrint('Actual Hours: $actualHours');
+    debugPrint('Difference: ${actualHours - expectedHours} hours');
+    
+    debugPrint('\n==========================================');
+  }
+
+  String _getDayName(int index) {
+    switch (index) {
+      case 0: return 'Monday';
+      case 1: return 'Tuesday';
+      case 2: return 'Wednesday';
+      case 3: return 'Thursday';
+      case 4: return 'Friday';
+      case 5: return 'Saturday';
+      case 6: return 'Sunday';
+      default: return '';
+    }
   }
 
   Future<TimeOfDay?> _showCustomTimePicker(BuildContext context) async {

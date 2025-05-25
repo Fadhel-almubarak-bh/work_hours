@@ -318,18 +318,6 @@ public class MyHomeWidgetProvider extends HomeWidgetProvider {
         int backgroundColor = Color.argb(transparency, 0, 0, 0); // black with alpha
         views.setInt(R.id.widget_root, "setBackgroundColor", backgroundColor);
         
-        // Set up click listener for view summary button
-        try {
-            Log.d(DEBUG_TAG, "Setting up summary button click listener");
-            Intent summaryIntent = new Intent(context, com.example.work_hours.MainActivity.class);
-            summaryIntent.putExtra("initialTab", 2); // Assuming 2 is the index for the Summary tab
-            PendingIntent summaryPendingIntent = PendingIntent.getActivity(
-                context, 3, summaryIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            views.setOnClickPendingIntent(R.id.widget_button_view_summary, summaryPendingIntent);
-        } catch (Exception e) {
-            Log.e(DEBUG_TAG, "Error setting up summary button: " + e.getMessage(), e);
-        }
-        
         return views;
     }
     

@@ -132,22 +132,4 @@
 
     </LinearLayout>
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:orientation="horizontal">
-
-        <Button
-            android:id="@+id/widget_button_view_summary"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:background="@drawable/rounded_white_button"
-            android:text="View Summary"
-            android:textStyle="bold"
-            android:textColor="#03A9F4"
-        />
-    </LinearLayout>
-
 </LinearLayout> 

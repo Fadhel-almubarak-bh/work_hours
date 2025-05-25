@@ -906,6 +906,10 @@ class _SummaryPageState extends State<SummaryPage> {
                     Text('Off Days: $offDays', style: TextStyle(fontSize: 13)),
                     Text('Extra Days: $extraWorkDays',
                         style: TextStyle(fontSize: 13)),
+                    Text('Expected Hours: ${configuredWorkDaysThisMonth * dailyTarget ~/ 60}h',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    Text('($configuredWorkDaysThisMonth days × ${dailyTarget ~/ 60}h)',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                   ],
                 ),
                 Column(

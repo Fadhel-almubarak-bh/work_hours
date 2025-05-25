@@ -97,6 +97,81 @@ class HiveDb {
       final excel = Excel.decodeBytes(bytes);
       debugPrint('[EXCEL_IMPORT] Excel file decoded successfully');
 
+      // First, process settings sheet if it exists
+      final settingsSheet = excel.tables['Settings'];
+      if (settingsSheet != null) {
+        debugPrint('[EXCEL_IMPORT] Found Settings sheet with ${settingsSheet.rows.length} rows');
+        
+        // Track settings import status
+        Map<String, bool> settingsImportStatus = {
+          'DailyTargetHours': false,
+          'MonthlySalary': false,
+          'WorkDays': false
+        };
+        
+        try {
+          for (var i = 1; i < settingsSheet.rows.length; i++) {
+            final row = settingsSheet.rows[i];
+            if (row.isEmpty || row.length < 2) continue;
+            
+            final settingName = row[0]?.value?.toString();
+            final settingValue = row[1]?.value?.toString();
+            
+            if (settingName == null || settingValue == null) continue;
+            
+            try {
+              if (settingName == 'DailyTargetHours') {
+                final hours = int.tryParse(settingValue);
+                if (hours != null && hours > 0 && hours <= 24) {
+                  await setDailyTargetHours(hours);
+                  settingsImportStatus['DailyTargetHours'] = true;
+                  debugPrint('[EXCEL_IMPORT] ✅ Successfully imported DailyTargetHours: $hours');
+                } else {
+                  debugPrint('[EXCEL_IMPORT] ⚠️ Invalid DailyTargetHours value: $settingValue');
+                }
+              } else if (settingName == 'MonthlySalary') {
+                final salary = double.tryParse(settingValue);
+                if (salary != null && salary >= 0) {
+                  await setMonthlySalary(salary);
+                  settingsImportStatus['MonthlySalary'] = true;
+                  debugPrint('[EXCEL_IMPORT] ✅ Successfully imported MonthlySalary: $salary');
+                } else {
+                  debugPrint('[EXCEL_IMPORT] ⚠️ Invalid MonthlySalary value: $settingValue');
+                }
+              } else if (settingName.startsWith('WorkDay_')) {
+                final dayName = settingName.substring(8); // Remove 'WorkDay_' prefix
+                final isWorkDay = settingValue.toLowerCase() == 'true';
+                final workDays = getWorkDays();
+                final dayIndex = _getDayIndex(dayName);
+                if (dayIndex != -1) {
+                  workDays[dayIndex] = isWorkDay;
+                  await setWorkDays(workDays);
+                  settingsImportStatus['WorkDays'] = true;
+                  debugPrint('[EXCEL_IMPORT] ✅ Successfully imported WorkDay_$dayName: $isWorkDay');
+                } else {
+                  debugPrint('[EXCEL_IMPORT] ⚠️ Invalid day name in WorkDay setting: $dayName');
+                }
+              }
+            } catch (e) {
+              debugPrint('[EXCEL_IMPORT] ❌ Error importing setting $settingName: $e');
+            }
+          }
+          
+          // Log settings import summary
+          debugPrint('[EXCEL_IMPORT] Settings import summary:');
+          settingsImportStatus.forEach((setting, success) {
+            debugPrint('$setting: ${success ? "✅" : "❌"}');
+          });
+          
+        } catch (e) {
+          debugPrint('[EXCEL_IMPORT] ❌ Error processing settings sheet: $e');
+          throw Exception('Error importing settings: $e');
+        }
+      } else {
+        debugPrint('[EXCEL_IMPORT] ⚠️ No Settings sheet found in the Excel file');
+      }
+
+      // Then process work hours sheet
       final sheet = excel.tables['WorkHours'];
       if (sheet == null) {
         debugPrint('[EXCEL_IMPORT] ❌ No "WorkHours" sheet found. Available sheets: ${excel.tables.keys.join(', ')}');
@@ -115,6 +190,7 @@ class HiveDb {
 
       int importedCount = 0;
       int skippedCount = 0;
+      int errorCount = 0;
 
       for (var i = 1; i < sheet.rows.length; i++) {
         final row = sheet.rows[i];
@@ -126,105 +202,110 @@ class HiveDb {
           continue;
         }
 
-        final rawDate = row[0]?.value;
-        debugPrint('[EXCEL_IMPORT] Raw date value: $rawDate (${rawDate.runtimeType})');
+        try {
+          final rawDate = row[0]?.value;
+          debugPrint('[EXCEL_IMPORT] Raw date value: $rawDate (${rawDate.runtimeType})');
 
-        String? dateKey;
-        // Always convert to string first to handle SharedString objects
-        String rawDateString = rawDate.toString();
-        debugPrint('[EXCEL_IMPORT] Converted date to string: "$rawDateString"');
-        
-        // Special handling for SharedString type that might come from Excel
-        if (rawDate.runtimeType.toString().contains('SharedString')) {
-          debugPrint('[EXCEL_IMPORT] Detected SharedString type, extracting value');
-          // The format appears to be the actual date we want, so use it directly if it follows yyyy-MM-dd pattern
-          if (rawDateString.length == 10 && rawDateString.contains('-') && 
-              rawDateString.indexOf('-') == 4 && rawDateString.lastIndexOf('-') == 7) {
-            dateKey = rawDateString;
-            debugPrint('[EXCEL_IMPORT] Using SharedString value directly: $dateKey');
-          }
-        } else if (rawDate is DateTime) {
-          dateKey = DateFormat('yyyy-MM-dd').format(rawDate);
-        } else if (rawDateString.isNotEmpty) {
-          // Handle date in common format "2025-05-21" directly
-          if (rawDateString.length == 10 && rawDateString.contains('-')) {
-            if (rawDateString.indexOf('-') == 4 && rawDateString.lastIndexOf('-') == 7) {
-              // Direct match for yyyy-MM-dd format
-              debugPrint('[EXCEL_IMPORT] Found date in yyyy-MM-dd format, using directly: $rawDateString');
-              dateKey = rawDateString;
-            }
-          }
+          String? dateKey;
+          // Always convert to string first to handle SharedString objects
+          String rawDateString = rawDate.toString();
+          debugPrint('[EXCEL_IMPORT] Converted date to string: "$rawDateString"');
           
-          // If we don't have a date key yet, try more parsing methods
-          if (dateKey == null) {
-            // Try various date formats
-            DateTime? parsed;
-            try {
-              // Try to parse the raw string
-              parsed = DateTime.tryParse(rawDateString);
-              
-              // Try other common formats if direct parse fails
-              if (parsed == null && rawDateString.length >= 10) {
-                // Try yyyy-MM-dd format with possible time component
-                if (rawDateString.contains('-') && rawDateString.indexOf('-') == 4) {
-                  final datePart = rawDateString.substring(0, 10);
-                  parsed = DateTime.tryParse(datePart);
-                  if (parsed != null) {
-                    debugPrint('[EXCEL_IMPORT] Parsed from yyyy-MM-dd part: $datePart');
+          // Special handling for SharedString type that might come from Excel
+          if (rawDate.runtimeType.toString().contains('SharedString')) {
+            debugPrint('[EXCEL_IMPORT] Detected SharedString type, extracting value');
+            // The format appears to be the actual date we want, so use it directly if it follows yyyy-MM-dd pattern
+            if (rawDateString.length == 10 && rawDateString.contains('-') && 
+                rawDateString.indexOf('-') == 4 && rawDateString.lastIndexOf('-') == 7) {
+              dateKey = rawDateString;
+              debugPrint('[EXCEL_IMPORT] Using SharedString value directly: $dateKey');
+            }
+          } else if (rawDate is DateTime) {
+            dateKey = DateFormat('yyyy-MM-dd').format(rawDate);
+          } else if (rawDateString.isNotEmpty) {
+            // Handle date in common format "2025-05-21" directly
+            if (rawDateString.length == 10 && rawDateString.contains('-')) {
+              if (rawDateString.indexOf('-') == 4 && rawDateString.lastIndexOf('-') == 7) {
+                // Direct match for yyyy-MM-dd format
+                debugPrint('[EXCEL_IMPORT] Found date in yyyy-MM-dd format, using directly: $rawDateString');
+                dateKey = rawDateString;
+              }
+            }
+            
+            // If we don't have a date key yet, try more parsing methods
+            if (dateKey == null) {
+              // Try various date formats
+              DateTime? parsed;
+              try {
+                // Try to parse the raw string
+                parsed = DateTime.tryParse(rawDateString);
+                
+                // Try other common formats if direct parse fails
+                if (parsed == null && rawDateString.length >= 10) {
+                  // Try yyyy-MM-dd format with possible time component
+                  if (rawDateString.contains('-') && rawDateString.indexOf('-') == 4) {
+                    final datePart = rawDateString.substring(0, 10);
+                    parsed = DateTime.tryParse(datePart);
+                    if (parsed != null) {
+                      debugPrint('[EXCEL_IMPORT] Parsed from yyyy-MM-dd part: $datePart');
+                    }
+                  }
+                  
+                  // Try dd/MM/yyyy format
+                  if (parsed == null && rawDateString.contains('/')) {
+                    final parts = rawDateString.split('/');
+                    if (parts.length == 3) {
+                      parsed = DateTime.tryParse('${parts[2]}-${parts[1].padLeft(2, '0')}-${parts[0].padLeft(2, '0')}');
+                    }
                   }
                 }
                 
-                // Try dd/MM/yyyy format
-                if (parsed == null && rawDateString.contains('/')) {
-                  final parts = rawDateString.split('/');
-                  if (parts.length == 3) {
-                    parsed = DateTime.tryParse('${parts[2]}-${parts[1].padLeft(2, '0')}-${parts[0].padLeft(2, '0')}');
-                  }
+                if (parsed != null) {
+                  dateKey = DateFormat('yyyy-MM-dd').format(parsed);
                 }
+              } catch (e) {
+                debugPrint('[EXCEL_IMPORT] Error parsing date: $e');
               }
-              
-              if (parsed != null) {
-                dateKey = DateFormat('yyyy-MM-dd').format(parsed);
+            }
+            
+            // Last resort fallback - if it looks like a date string, use it
+            if (dateKey == null && rawDateString.length == 10) {
+              // Check if it matches yyyy-MM-dd pattern with regex
+              final regExp = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+              if (regExp.hasMatch(rawDateString)) {
+                debugPrint('[EXCEL_IMPORT] Using date string based on pattern match: $rawDateString');
+                dateKey = rawDateString;
               }
+            }
+          } else if (rawDate is num) {
+            // Handle Excel numeric date format (days since 1900-01-01)
+            try {
+              final date = DateTime(1899, 12, 30).add(Duration(days: rawDate.toInt()));
+              dateKey = DateFormat('yyyy-MM-dd').format(date);
+              debugPrint('[EXCEL_IMPORT] Converted numeric date: $rawDate to $dateKey');
             } catch (e) {
-              debugPrint('[EXCEL_IMPORT] Error parsing date: $e');
+              debugPrint('[EXCEL_IMPORT] Error converting numeric date: $e');
             }
           }
-          
-          // Last resort fallback - if it looks like a date string, use it
-          if (dateKey == null && rawDateString.length == 10) {
-            // Check if it matches yyyy-MM-dd pattern with regex
-            final regExp = RegExp(r'^\d{4}-\d{2}-\d{2}$');
-            if (regExp.hasMatch(rawDateString)) {
-              debugPrint('[EXCEL_IMPORT] Using date string based on pattern match: $rawDateString');
-              dateKey = rawDateString;
-            }
+
+          debugPrint('[EXCEL_IMPORT] Processed date key: $dateKey');
+
+          if (dateKey == null) {
+            debugPrint('[EXCEL_IMPORT] ⚠️ Could not parse date for row $i');
+            skippedCount++;
+            continue;
           }
-        } else if (rawDate is num) {
-          // Handle Excel numeric date format (days since 1900-01-01)
-          try {
-            final date = DateTime(1899, 12, 30).add(Duration(days: rawDate.toInt()));
-            dateKey = DateFormat('yyyy-MM-dd').format(date);
-            debugPrint('[EXCEL_IMPORT] Converted numeric date: $rawDate to $dateKey');
-          } catch (e) {
-            debugPrint('[EXCEL_IMPORT] Error converting numeric date: $e');
-          }
-        }
 
-        debugPrint('[EXCEL_IMPORT] Processed date key: $dateKey');
+          final clockInStr = row[1]?.value?.toString();
+          final clockOutStr = row[2]?.value?.toString();
+          final offDayStr = (row[4]?.value?.toString() ?? '').toLowerCase();
+          final descriptionStr = row.length > 5 ? row[5]?.value?.toString() : null;
 
-        final clockInStr = row[1]?.value?.toString();
-        final clockOutStr = row[2]?.value?.toString();
-        final offDayStr = (row[4]?.value?.toString() ?? '').toLowerCase();
-        // Only try to access description if the row has enough columns
-        final descriptionStr = row.length > 5 ? row[5]?.value?.toString() : null;
+          debugPrint('[EXCEL_IMPORT] Row values - Clock In: $clockInStr, Clock Out: $clockOutStr, Off Day: $offDayStr, Description: $descriptionStr');
 
-        debugPrint('[EXCEL_IMPORT] Row values - Clock In: $clockInStr, Clock Out: $clockOutStr, Off Day: $offDayStr, Description: $descriptionStr');
+          bool isOffDay = offDayStr == 'yes' || offDayStr == 'true' || offDayStr == '1';
+          String? description = isOffDay ? (descriptionStr ?? 'Annual Leave') : descriptionStr;
 
-        bool isOffDay = offDayStr == 'yes' || offDayStr == 'true' || offDayStr == '1';
-        String? description = isOffDay ? (descriptionStr ?? 'Annual Leave') : descriptionStr;
-
-        if (dateKey != null) {
           if (isOffDay) {
             debugPrint('[EXCEL_IMPORT] Importing off day for $dateKey with description: $description');
             await Hive.box('work_hours').put(dateKey, {
@@ -254,13 +335,13 @@ class HiveDb {
               'out': clockOutStr,
               'duration': durationMinutes,
               'offDay': false,
-              'description': description,  // Save description even for normal work days
+              'description': description,
             });
             importedCount++;
           }
-        } else {
-          debugPrint('[EXCEL_IMPORT] ⚠️ Skipping row $i: could not parse date.');
-          skippedCount++;
+        } catch (e) {
+          debugPrint('[EXCEL_IMPORT] ❌ Error processing row $i: $e');
+          errorCount++;
         }
       }
 
@@ -268,7 +349,12 @@ class HiveDb {
       await updateWidget();
       await updateWidgetWithOvertimeInfo();
       
-      debugPrint('[EXCEL_IMPORT] ✅ Import completed. Imported: $importedCount, Skipped: $skippedCount');
+      debugPrint('[EXCEL_IMPORT] ✅ Import completed. Imported: $importedCount, Skipped: $skippedCount, Errors: $errorCount');
+      
+      // Throw an exception if there were any errors during import
+      if (errorCount > 0) {
+        throw Exception('Import completed with $errorCount errors. Please check the logs for details.');
+      }
     } catch (e, stackTrace) {
       debugPrint('[EXCEL_IMPORT] ❌ Error importing from Excel: $e');
       debugPrint('[EXCEL_IMPORT] Stack trace: $stackTrace');
@@ -292,6 +378,26 @@ class HiveDb {
         'Off Day', 
         'Description'
       ]);
+
+      // Create a Settings sheet for app settings
+      final settingsSheet = excel['Settings'];
+      
+      // Add header
+      settingsSheet.appendRow([
+        'Setting',
+        'Value'
+      ]);
+
+      // Export settings
+      settingsSheet.appendRow(['DailyTargetHours', getDailyTargetHours().toString()]);
+      settingsSheet.appendRow(['MonthlySalary', getMonthlySalary().toString()]);
+      
+      // Export work days
+      final workDays = getWorkDays();
+      for (int i = 0; i < 7; i++) {
+        final dayName = _getDayName(i);
+        settingsSheet.appendRow(['WorkDay_$dayName', workDays[i].toString()]);
+      }
 
       // Add entries
       entries.forEach((date, entry) {
@@ -512,29 +618,56 @@ class HiveDb {
       int totalMinutes = 0;
       int workDays = 0;
       int offDays = 0;
+      int nonWorkingDays = 0;
       final dailyTarget = getDailyTargetMinutes();
+      final workDaysSetting = getWorkDays();
+
+      debugPrint('\n🔍 [STATS_DEBUG] Calculating stats for range:');
+      debugPrint('Start date: ${DateFormat('yyyy-MM-dd').format(start)}');
+      debugPrint('End date: ${DateFormat('yyyy-MM-dd').format(end)}');
 
       for (var day = start;
           day.isBefore(end.add(const Duration(days: 1)));
           day = day.add(const Duration(days: 1))) {
         final dateKey = DateFormat('yyyy-MM-dd').format(day);
         final entry = _workHoursBox.get(dateKey);
+        final weekdayIndex = day.weekday - 1; // 0-based index (0 = Monday)
+        final bool isConfiguredWorkDay = workDaysSetting[weekdayIndex];
 
         if (entry != null) {
           if (entry['offDay'] == true) {
             totalMinutes += dailyTarget;
             offDays++;
+            debugPrint('📅 $dateKey: Off Day (Description: ${entry['description']})');
           } else if (entry['duration'] != null) {
             totalMinutes += (entry['duration'] as num).toInt();
             workDays++;
+            debugPrint('📅 $dateKey: Work Day (Duration: ${entry['duration']} minutes)');
+          }
+        } else {
+          // If no entry and it's not a configured work day (e.g., Friday), count it as a non-working day
+          if (!isConfiguredWorkDay) {
+            nonWorkingDays++;
+            debugPrint('📅 $dateKey: Non-Work Day (${_getDayName(weekdayIndex)})');
+          } else {
+            debugPrint('📅 $dateKey: No entry');
           }
         }
       }
+
+      debugPrint('\n📊 [STATS_DEBUG] Final counts:');
+      debugPrint('Total Minutes: $totalMinutes');
+      debugPrint('Work Days: $workDays');
+      debugPrint('Off Days (Excused): $offDays');
+      debugPrint('Non-Work Days: $nonWorkingDays');
+      debugPrint('Total Days Off: ${offDays + nonWorkingDays}');
 
       return {
         'totalMinutes': totalMinutes,
         'workDays': workDays,
         'offDays': offDays,
+        'nonWorkingDays': nonWorkingDays,
+        'totalDaysOff': offDays + nonWorkingDays,
       };
     } catch (e) {
       debugPrint('Error in getStatsForRange: $e');
@@ -542,6 +675,8 @@ class HiveDb {
         'totalMinutes': 0,
         'workDays': 0,
         'offDays': 0,
+        'nonWorkingDays': 0,
+        'totalDaysOff': 0,
       };
     }
   }
@@ -845,10 +980,10 @@ class HiveDb {
         final dateKey = DateFormat('yyyy-MM-dd').format(day);
         final entry = allEntries[dateKey];
         final weekdayIndex = day.weekday - 1; // 0-based index (0 = Monday)
-        final bool isWorkDay = workDaysSetting[weekdayIndex];
+        final bool isConfiguredWorkDay = workDaysSetting[weekdayIndex];
         
         // Count expected work time
-        if (isWorkDay) {
+        if (isConfiguredWorkDay) {
           totalExpectedMinutes += dailyTarget;
         }
         
@@ -861,7 +996,7 @@ class HiveDb {
             final duration = (entry['duration'] as num).toInt();
             totalWorkedMinutes += duration;
             
-            if (isWorkDay) {
+            if (isConfiguredWorkDay) {
               regularWorkDays++;
             } else {
               extraWorkDays++;
@@ -966,7 +1101,8 @@ class HiveDb {
       int offDaysCount = 0;
       int workDaysCount = 0;
       int missedWorkDays = 0;
-      int extraWorkDays = 0; // Days worked that weren't scheduled
+      int extraWorkDays = 0;
+      int nonWorkingDaysCount = 0; // Count of days that are not work days according to settings
 
       // Iterate through each day of the month up to today
       for (var day = firstOfMonth;
@@ -977,12 +1113,14 @@ class HiveDb {
         final weekdayIndex = day.weekday - 1; // Convert to 0-based index (0 = Monday)
         final bool isConfiguredWorkDay = workDaysSetting[weekdayIndex];
 
-        // Add target minutes only for configured work days
-        if (isConfiguredWorkDay) {
+        // Count non-working days from settings
+        if (!isConfiguredWorkDay) {
+          nonWorkingDaysCount++;
+          targetMinutes += dailyTarget; // Add target minutes for non-working days
+          debugPrint('\n📆 ${_getDayName(weekdayIndex)} $dateKey (Non-Working Day from Settings)');
+        } else {
           targetMinutes += dailyTarget;
           debugPrint('\n📆 ${_getDayName(weekdayIndex)} $dateKey (Configured Work Day)');
-        } else {
-          debugPrint('\n📆 ${_getDayName(weekdayIndex)} $dateKey (Not a Work Day)');
         }
 
         if (entry != null) {
@@ -990,7 +1128,6 @@ class HiveDb {
           final num? duration = entry['duration'] as num?;
 
           if (isOffDay) {
-            // Always add daily target for off days, regardless of whether it's a configured work day
             workedMinutes += dailyTarget;
             offDaysCount++;
             debugPrint('   ✨ Off Day: +$dailyTarget minutes');
@@ -1025,6 +1162,7 @@ class HiveDb {
       debugPrint('   - Off days counted: $offDaysCount');
       debugPrint('   - Extra work days: $extraWorkDays');
       debugPrint('   - Missed work days: $missedWorkDays');
+      debugPrint('   - Non-working days from settings: $nonWorkingDaysCount');
       debugPrint('🔄 Overtime    : $sign${hours.abs()}h ${minutes.abs()}m (${overtime.abs()} minutes)');
     } catch (e) {
       debugPrint('Error in calculateAndPrintMonthlyOvertime: $e');
@@ -1117,7 +1255,7 @@ class HiveDb {
         final weekdayIndex = day.weekday - 1; // 0-based index (0 = Monday)
         final bool isConfiguredWorkDay = workDaysSetting[weekdayIndex];
         
-        // Add target minutes for configured work days
+        // Only add target minutes for configured work days
         if (isConfiguredWorkDay) {
           expectedMinutes += dailyTarget;
         }
@@ -1144,6 +1282,68 @@ class HiveDb {
     final lastMonthEnd = DateTime(now.year, now.month, 0); // Last day of previous month
     
     return getExpectedWorkMinutesForRange(lastMonthStart, lastMonthEnd);
+  }
+
+  static double getMonthlySalary() {
+    try {
+      return _settingsBox.get('monthlySalary', defaultValue: 0.0);
+    } catch (e) {
+      debugPrint('Error in getMonthlySalary: $e');
+      return 0.0;
+    }
+  }
+
+  static Future<void> setMonthlySalary(double salary) async {
+    try {
+      if (salary < 0) return;
+      debugPrint('🔍 [MONTHLY_SALARY] Setting monthly salary to: $salary');
+      await _settingsBox.put('monthlySalary', salary);
+      final saved = _settingsBox.get('monthlySalary');
+      debugPrint('🔍 [MONTHLY_SALARY] Verified saved value: $saved');
+    } catch (e) {
+      debugPrint('Error in setMonthlySalary: $e');
+      rethrow;
+    }
+  }
+
+  static int _getDayIndex(String dayName) {
+    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return days.indexOf(dayName);
+  }
+
+  static List<Map<String, dynamic>> getEntriesForRange(DateTime start, DateTime end) {
+    final box = Hive.box('work_hours');
+    final entries = <Map<String, dynamic>>[];
+    
+    // Convert dates to start and end of day
+    final startDate = DateTime(start.year, start.month, start.day);
+    final endDate = DateTime(end.year, end.month, end.day, 23, 59, 59);
+    
+    // Get all entries
+    final allEntries = box.toMap();
+    
+    // Filter entries within the date range
+    allEntries.forEach((key, value) {
+      if (value is Map) {
+        final entryDate = DateTime.parse(key);
+        if (entryDate.isAfter(startDate.subtract(const Duration(days: 1))) && 
+            entryDate.isBefore(endDate.add(const Duration(days: 1)))) {
+          // Add the date to the entry map
+          final entry = Map<String, dynamic>.from(value);
+          entry['date'] = key; // Add the date key to the entry
+          entries.add(entry);
+        }
+      }
+    });
+    
+    // Sort entries by date
+    entries.sort((a, b) {
+      final dateA = DateTime.parse(a['date'] as String);
+      final dateB = DateTime.parse(b['date'] as String);
+      return dateA.compareTo(dateB);
+    });
+    
+    return entries;
   }
 }
 

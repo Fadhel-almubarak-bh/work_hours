@@ -276,10 +276,10 @@ class MainPage extends StatefulWidget {
   const MainPage({super.key});
 
   @override
-  State<MainPage> createState() => _MainPageState();
+  State<MainPage> createState() => MainPageState();
 }
 
-class _MainPageState extends State<MainPage> {
+class MainPageState extends State<MainPage> {
   int _selectedIndex = 0;
   final List<Widget> _pages = [
     const HomePage(),
@@ -307,7 +307,7 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
-  void _onItemTapped(int index) {
+  void onItemTapped(int index) {
     setState(() {
       if (index == 2) {
         _pages[2] = SummaryPage(key: UniqueKey());
@@ -331,7 +331,7 @@ class _MainPageState extends State<MainPage> {
             bottom: 0,
             child: BottomNavigationBar(
               currentIndex: _selectedIndex,
-              onTap: _onItemTapped,
+              onTap: onItemTapped,
               type: BottomNavigationBarType.fixed,
               items: const [
                 BottomNavigationBarItem(
