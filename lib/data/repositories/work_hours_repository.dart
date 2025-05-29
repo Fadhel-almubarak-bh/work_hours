@@ -183,6 +183,29 @@ class WorkHoursRepository {
     final totalEarnings = (actualMinutes * hourlyRate / 60) + overtimePay;
     final earningsAfterInsurance = totalEarnings * (1 - settings.insuranceRate);
 
+    // Calculate today's earnings and minutes
+    final today = DateTime.now();
+    final todayEntry = await getWorkEntry(today);
+    int todayMinutes = 0;
+    double todayEarnings = 0.0;
+
+    if (todayEntry != null) {
+      if (todayEntry.isOffDay) {
+        todayMinutes = settings.dailyTargetHours * 60;
+      } else {
+        todayMinutes = todayEntry.duration;
+        if (todayEntry.clockOut == null && todayEntry.clockIn != null) {
+          // If still working, calculate minutes up to now
+          todayMinutes = DateTime.now().difference(todayEntry.clockIn!).inMinutes;
+        }
+      }
+      todayEarnings = (todayMinutes * hourlyRate / 60);
+      if (todayMinutes > settings.dailyTargetHours * 60) {
+        final overtimeToday = todayMinutes - (settings.dailyTargetHours * 60);
+        todayEarnings += overtimeToday * overtimeRate / 60;
+      }
+    }
+
     return {
       'expectedWorkDays': expectedWorkDays,
       'expectedMinutes': expectedMinutes,
@@ -195,6 +218,14 @@ class WorkHoursRepository {
       'overtimePay': overtimePay,
       'totalEarnings': totalEarnings,
       'earningsAfterInsurance': earningsAfterInsurance,
+      'todayMinutes': todayMinutes,
+      'todayEarnings': todayEarnings,
+      'monthlySalary': settings.monthlySalary,
+      'expectedHours': expectedWorkDays * settings.dailyTargetHours,
+      'workDaysCount': expectedWorkDays,
+      'dailyHours': settings.dailyTargetHours,
+      'nonWorkingDaysCount': DateTimeUtils.getNonWorkingDaysInMonth(month, settings.workDays),
+      'totalDaysOff': offDaysCount + DateTimeUtils.getNonWorkingDaysInMonth(month, settings.workDays),
     };
   }
 }

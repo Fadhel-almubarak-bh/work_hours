@@ -20,9 +20,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _pages = [
     const WorkHoursScreen(),
+    const HistoryScreen(),
     const SummaryScreen(),
     const SalaryScreen(),
-    const HistoryScreen(),
     const SettingsScreen(),
   ];
 

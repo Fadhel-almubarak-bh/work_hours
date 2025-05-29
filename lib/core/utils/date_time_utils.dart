@@ -119,4 +119,20 @@ class DateTimeUtils {
     }
     return months;
   }
+
+  /// Returns the number of non-working days in a month
+  static int getNonWorkingDaysInMonth(DateTime date, List<bool> workDays) {
+    final start = startOfMonth(date);
+    final end = endOfMonth(date);
+    int count = 0;
+    var current = start;
+    
+    while (current.isBefore(end) || current.isAtSameMomentAs(end)) {
+      if (!workDays[current.weekday - 1]) {
+        count++;
+      }
+      current = current.add(const Duration(days: 1));
+    }
+    return count;
+  }
 }

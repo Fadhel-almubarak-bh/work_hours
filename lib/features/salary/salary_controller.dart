@@ -20,6 +20,14 @@ class SalaryController extends ChangeNotifier {
   DateTime get selectedMonth => _selectedMonth;
   List<Map<String, dynamic>> get monthlyHistory => _monthlyHistory;
 
+  String getCurrentMonthName() {
+    final monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return monthNames[DateTime.now().month - 1];
+  }
+
   Future<void> initialize() async {
     _settings = await _repository.getSettings();
     await loadCurrentMonthSalary();
