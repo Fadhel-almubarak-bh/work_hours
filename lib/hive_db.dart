@@ -29,11 +29,11 @@ class HiveDb {
   static Future<void> clockIn(DateTime time) async {
     try {
       final dateKey = DateFormat('yyyy-MM-dd').format(time);
-      
+
       // Check if there's any existing entry for this day
       final existing = _workHoursBox.get(dateKey);
       final String? description = existing?['description'] as String?;
-      
+
       await _workHoursBox.put(dateKey, {
         'in': time.toIso8601String(),
         'out': null,
@@ -69,16 +69,16 @@ class HiveDb {
         debugPrint('[EXCEL_IMPORT] ⚠️ File path is null.');
         return;
       }
-      
+
       debugPrint('[EXCEL_IMPORT] Selected file: $filePath');
-      
+
       // Verify the file exists
       final file = File(filePath);
       if (!await file.exists()) {
         debugPrint('[EXCEL_IMPORT] ❌ File does not exist: $filePath');
         throw Exception('File does not exist: $filePath');
       }
-      
+
       // Read file bytes using try-catch to handle potential permission issues
       Uint8List bytes;
       try {
@@ -91,7 +91,7 @@ class HiveDb {
         debugPrint('[EXCEL_IMPORT] ❌ Error reading file: $e');
         throw Exception('Cannot read file. Please check app permissions or try selecting a different file location.');
       }
-      
+
       debugPrint('[EXCEL_IMPORT] File read successfully, size: ${bytes.length} bytes');
 
       final excel = Excel.decodeBytes(bytes);
@@ -101,24 +101,24 @@ class HiveDb {
       final settingsSheet = excel.tables['Settings'];
       if (settingsSheet != null) {
         debugPrint('[EXCEL_IMPORT] Found Settings sheet with ${settingsSheet.rows.length} rows');
-        
+
         // Track settings import status
         Map<String, bool> settingsImportStatus = {
           'DailyTargetHours': false,
           'MonthlySalary': false,
           'WorkDays': false
         };
-        
+
         try {
           for (var i = 1; i < settingsSheet.rows.length; i++) {
             final row = settingsSheet.rows[i];
             if (row.isEmpty || row.length < 2) continue;
-            
+
             final settingName = row[0]?.value?.toString();
             final settingValue = row[1]?.value?.toString();
-            
+
             if (settingName == null || settingValue == null) continue;
-            
+
             try {
               if (settingName == 'DailyTargetHours') {
                 final hours = int.tryParse(settingValue);
@@ -156,13 +156,13 @@ class HiveDb {
               debugPrint('[EXCEL_IMPORT] ❌ Error importing setting $settingName: $e');
             }
           }
-          
+
           // Log settings import summary
           debugPrint('[EXCEL_IMPORT] Settings import summary:');
           settingsImportStatus.forEach((setting, success) {
             debugPrint('$setting: ${success ? "✅" : "❌"}');
           });
-          
+
         } catch (e) {
           debugPrint('[EXCEL_IMPORT] ❌ Error processing settings sheet: $e');
           throw Exception('Error importing settings: $e');
@@ -210,18 +210,18 @@ class HiveDb {
           // Always convert to string first to handle SharedString objects
           String rawDateString = rawDate.toString();
           debugPrint('[EXCEL_IMPORT] Converted date to string: "$rawDateString"');
-          
+
           // Special handling for SharedString type that might come from Excel
           if (rawDate.runtimeType.toString().contains('SharedString')) {
             debugPrint('[EXCEL_IMPORT] Detected SharedString type, extracting value');
             // The format appears to be the actual date we want, so use it directly if it follows yyyy-MM-dd pattern
-            if (rawDateString.length == 10 && rawDateString.contains('-') && 
+            if (rawDateString.length == 10 && rawDateString.contains('-') &&
                 rawDateString.indexOf('-') == 4 && rawDateString.lastIndexOf('-') == 7) {
               dateKey = rawDateString;
               debugPrint('[EXCEL_IMPORT] Using SharedString value directly: $dateKey');
             }
           } else if (rawDate is DateTime) {
-            dateKey = DateFormat('yyyy-MM-dd').format(rawDate);
+            // dateKey = DateFormat('yyyy-MM-dd').format(rawDate);
           } else if (rawDateString.isNotEmpty) {
             // Handle date in common format "2025-05-21" directly
             if (rawDateString.length == 10 && rawDateString.contains('-')) {
@@ -231,7 +231,7 @@ class HiveDb {
                 dateKey = rawDateString;
               }
             }
-            
+
             // If we don't have a date key yet, try more parsing methods
             if (dateKey == null) {
               // Try various date formats
@@ -239,7 +239,7 @@ class HiveDb {
               try {
                 // Try to parse the raw string
                 parsed = DateTime.tryParse(rawDateString);
-                
+
                 // Try other common formats if direct parse fails
                 if (parsed == null && rawDateString.length >= 10) {
                   // Try yyyy-MM-dd format with possible time component
@@ -250,7 +250,7 @@ class HiveDb {
                       debugPrint('[EXCEL_IMPORT] Parsed from yyyy-MM-dd part: $datePart');
                     }
                   }
-                  
+
                   // Try dd/MM/yyyy format
                   if (parsed == null && rawDateString.contains('/')) {
                     final parts = rawDateString.split('/');
@@ -259,7 +259,7 @@ class HiveDb {
                     }
                   }
                 }
-                
+
                 if (parsed != null) {
                   dateKey = DateFormat('yyyy-MM-dd').format(parsed);
                 }
@@ -267,7 +267,7 @@ class HiveDb {
                 debugPrint('[EXCEL_IMPORT] Error parsing date: $e');
               }
             }
-            
+
             // Last resort fallback - if it looks like a date string, use it
             if (dateKey == null && rawDateString.length == 10) {
               // Check if it matches yyyy-MM-dd pattern with regex
@@ -280,8 +280,8 @@ class HiveDb {
           } else if (rawDate is num) {
             // Handle Excel numeric date format (days since 1900-01-01)
             try {
-              final date = DateTime(1899, 12, 30).add(Duration(days: rawDate.toInt()));
-              dateKey = DateFormat('yyyy-MM-dd').format(date);
+              // final date = DateTime(1899, 12, 30).add(Duration(days: rawDate.toInt()));
+              // dateKey = DateFormat('yyyy-MM-dd').format(date);
               debugPrint('[EXCEL_IMPORT] Converted numeric date: $rawDate to $dateKey');
             } catch (e) {
               debugPrint('[EXCEL_IMPORT] Error converting numeric date: $e');
@@ -348,9 +348,9 @@ class HiveDb {
       // Update widget after import
       await updateWidget();
       await updateWidgetWithOvertimeInfo();
-      
+
       debugPrint('[EXCEL_IMPORT] ✅ Import completed. Imported: $importedCount, Skipped: $skippedCount, Errors: $errorCount');
-      
+
       // Throw an exception if there were any errors during import
       if (errorCount > 0) {
         throw Exception('Import completed with $errorCount errors. Please check the logs for details.');
@@ -371,45 +371,45 @@ class HiveDb {
 
       // Add Header with Description column
       sheet.appendRow([
-        'Date', 
-        'Clock In', 
-        'Clock Out', 
-        'Duration (minutes)', 
-        'Off Day', 
-        'Description'
+        // 'Date',
+        // 'Clock In',
+        // 'Clock Out',
+        // 'Duration (minutes)',
+        // 'Off Day',
+        // 'Description'
       ]);
 
       // Create a Settings sheet for app settings
       final settingsSheet = excel['Settings'];
-      
+
       // Add header
       settingsSheet.appendRow([
-        'Setting',
-        'Value'
+        // 'Setting',
+        // 'Value'
       ]);
 
       // Export settings
-      settingsSheet.appendRow(['DailyTargetHours', getDailyTargetHours().toString()]);
-      settingsSheet.appendRow(['MonthlySalary', getMonthlySalary().toString()]);
-      
+      // settingsSheet.appendRow(['DailyTargetHours', getDailyTargetHours().toString()]);
+      // settingsSheet.appendRow(['MonthlySalary', getMonthlySalary().toString()]);
+
       // Export work days
       final workDays = getWorkDays();
       for (int i = 0; i < 7; i++) {
         final dayName = _getDayName(i);
-        settingsSheet.appendRow(['WorkDay_$dayName', workDays[i].toString()]);
+        // settingsSheet.appendRow(['WorkDay_$dayName', workDays[i].toString()]);
       }
 
       // Add entries
       entries.forEach((date, entry) {
         // Format the date as a simple string to ensure it can be properly parsed on import
         final formattedDate = date;
-        
+
         sheet.appendRow([
-          formattedDate, // Use the date key directly as the date
+          // formattedDate, // Use the date key directly as the date
           entry['in'] ?? '',
           entry['out'] ?? '',
           entry['duration'] ?? 0,
-          entry['offDay'] == true ? 'Yes' : 'No',
+          // entry['offDay'] == true ? 'Yes' : 'No',
           entry['description'] ?? '',
         ]);
       });
@@ -442,26 +442,26 @@ class HiveDb {
         // If we're on Android 11+ (API 30+), use the saveable file approach
         if (sdkVersion != null && sdkVersion >= 30) {
           debugPrint('📱 Using Android 11+ file saving approach');
-          
+
           // For Android 11+, we need to pass the bytes directly to saveFile
           final result = await FilePicker.platform.saveFile(
             dialogTitle: 'Save Work Hours Export',
             fileName: suggestedFileName,
             allowedExtensions: ['xlsx'],
             type: FileType.custom,
-            bytes: uint8FileBytes, // Pass the Uint8List bytes
+            // bytes: uint8FileBytes, // Pass the Uint8List bytes
           );
-          
+
           if (result == null) {
             debugPrint('⚠️ User canceled file save operation');
             return;
           }
-          
+
           debugPrint('✅ Exported work hours to Excel successfully using the system file picker');
           return;
         }
       }
-        
+
       // Legacy approach for older Android versions and other platforms
       debugPrint('📱 Using legacy file saving approach');
       String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
@@ -474,7 +474,7 @@ class HiveDb {
       // Create the file path
       final path = '$selectedDirectory/$suggestedFileName';
       debugPrint('📝 Preparing to export to: $path');
-      
+
       // Create directory path if it doesn't exist
       try {
         final directory = Directory(selectedDirectory);
@@ -482,12 +482,12 @@ class HiveDb {
           debugPrint('📁 Creating directory: $selectedDirectory');
           await directory.create(recursive: true);
         }
-        
+
         // Verify the directory was created and is writable
         if (!await directory.exists()) {
           throw Exception('Failed to create directory: $selectedDirectory');
         }
-        
+
         // Test write permissions by creating a small test file
         final testFile = File('$selectedDirectory/test_write_permissions.txt');
         await testFile.writeAsString('Testing write permissions');
@@ -502,12 +502,12 @@ class HiveDb {
       final file = File(path);
       await file.writeAsBytes(uint8FileBytes);
       debugPrint('✅ Exported work hours to Excel: $path');
-      
+
       // Verify the file was written successfully
       if (!await file.exists()) {
         throw Exception('File was not created: $path');
       }
-      
+
       final fileSize = await file.length();
       debugPrint('📊 Exported file size: $fileSize bytes');
     } catch (e) {
@@ -866,7 +866,7 @@ class HiveDb {
       // Debug: Check what's happening with the widget page
       final widgetPageTest = await HomeWidget.getWidgetData<dynamic>('_widgetPage');
       debugPrint("🔍 [WIDGET_DEBUG] Current widget page data: ${widgetPageTest} (type: ${widgetPageTest?.runtimeType})");
-      
+
       final now = DateTime.now();
       final todayEntry = getDayEntry(now);
       debugPrint("🔍 [WIDGET_DEBUG] Today's entry: ${todayEntry != null ? 'found' : 'not found'}");
@@ -950,7 +950,7 @@ class HiveDb {
       debugPrint("❌ [WIDGET_DEBUG] Stack trace: $stackTrace");
     }
   }
-  
+
   // Method to update the widget with overtime information
   static Future<void> updateWidgetWithOvertimeInfo() async {
     try {
@@ -960,19 +960,19 @@ class HiveDb {
       final firstOfMonth = DateTime(now.year, now.month, 1);
       final today = DateTime(now.year, now.month, now.day);
       final currentMonthName = DateFormat('MMMM yyyy').format(firstOfMonth);
-      
+
       // Get workdays counter
       final allEntries = getAllEntries();
       final workDaysSetting = getWorkDays();
       final dailyTarget = getDailyTargetMinutes();
-      
+
       // Initialize counters
       int regularWorkDays = 0;
       int offDays = 0;
       int extraWorkDays = 0;
       int totalWorkedMinutes = 0;
       int totalExpectedMinutes = 0;
-      
+
       // Calculate days and minutes
       for (var day = firstOfMonth;
           day.isBefore(today.add(const Duration(days: 1)));
@@ -981,12 +981,12 @@ class HiveDb {
         final entry = allEntries[dateKey];
         final weekdayIndex = day.weekday - 1; // 0-based index (0 = Monday)
         final bool isConfiguredWorkDay = workDaysSetting[weekdayIndex];
-        
+
         // Count expected work time
         if (isConfiguredWorkDay) {
           totalExpectedMinutes += dailyTarget;
         }
-        
+
         // Count actual work time
         if (entry != null) {
           if (entry['offDay'] == true) {
@@ -995,7 +995,7 @@ class HiveDb {
           } else if (entry['duration'] != null) {
             final duration = (entry['duration'] as num).toInt();
             totalWorkedMinutes += duration;
-            
+
             if (isConfiguredWorkDay) {
               regularWorkDays++;
             } else {
@@ -1004,14 +1004,14 @@ class HiveDb {
           }
         }
       }
-      
+
       // Calculate overtime
       final overtimeMinutes = totalWorkedMinutes - totalExpectedMinutes;
       final isAhead = overtimeMinutes >= 0;
       debugPrint("🔍 [WIDGET_DEBUG] Calculated total expected minutes: $totalExpectedMinutes");
       debugPrint("🔍 [WIDGET_DEBUG] Calculated total worked minutes: $totalWorkedMinutes");
       debugPrint("🔍 [WIDGET_DEBUG] Calculated overtime minutes: $overtimeMinutes");
-      
+
       // Format strings for the widget
       final overtimeText = "Overtime: ${_formatDurationForWidgetDb(overtimeMinutes)}";
       final expectedHours = totalExpectedMinutes ~/ 60;
@@ -1021,10 +1021,10 @@ class HiveDb {
       final expectedVsActual = "Expected: ${expectedHours}h ${expectedMinutes}m / Actual: ${actualHours}h ${actualMinutes}m";
       final workDaysText = "Work Days: ${regularWorkDays + extraWorkDays}";
       final offDaysText = "Off Days: $offDays";
-      final statusMessage = isAhead 
-          ? "You are ahead of schedule!" 
+      final statusMessage = isAhead
+          ? "You are ahead of schedule!"
           : "You are behind schedule";
-      
+
       // Save extended data for widget
       await HomeWidget.saveWidgetData<String>('_currentMonthName', currentMonthName);
       await HomeWidget.saveWidgetData<String>('_overtimeText', overtimeText);
@@ -1033,7 +1033,7 @@ class HiveDb {
       await HomeWidget.saveWidgetData<String>('_offDaysText', offDaysText);
       await HomeWidget.saveWidgetData<String>('_statusMessage', statusMessage);
       await HomeWidget.saveWidgetData<int>('_overtimeColor', isAhead ? 1 : 0); // 1 = green, 0 = red
-      
+
       debugPrint("Saving extended widget data:");
       debugPrint("Month: $currentMonthName");
       debugPrint("Overtime: $overtimeText");
@@ -1042,19 +1042,19 @@ class HiveDb {
       debugPrint("Off Days: $offDaysText");
       debugPrint("Status Message: $statusMessage");
       debugPrint("Overtime Color: ${isAhead ? 'green' : 'red'}");
-      
+
       // Trigger widget update
       await HomeWidget.updateWidget(
           name: 'MyHomeWidgetProvider',
           androidName: 'MyHomeWidgetProvider',
           iOSName: 'MyHomeWidgetProvider');
-          
+
       // Get the current widget page, if any
       final currentWidgetPage = await HomeWidget.getWidgetData<int>('_widgetPage') ?? 0;
       debugPrint("🔍 [WIDGET_DEBUG] Current widget page before preserving: $currentWidgetPage");
       // Preserve the current widget page in case it was changed by the user
       await HomeWidget.saveWidgetData<int>('_widgetPage', currentWidgetPage);
-      
+
       debugPrint("✅ [WIDGET_DEBUG] Widget updated with overtime information.");
     } catch (e, stackTrace) {
       debugPrint('❌ [WIDGET_DEBUG] Error updating widget with overtime info: $e');
@@ -1133,7 +1133,7 @@ class HiveDb {
             debugPrint('   ✨ Off Day: +$dailyTarget minutes');
           } else if (duration != null) {
             workedMinutes += duration.toInt();
-            
+
             if (isConfiguredWorkDay) {
               workDaysCount++;
               debugPrint('   💪 Worked: +${duration.toInt()} minutes');
@@ -1179,14 +1179,14 @@ class HiveDb {
       final now = DateTime.now();
       final firstOfMonth = DateTime(now.year, now.month, 1);
       final today = DateTime(now.year, now.month, now.day);
-      
+
       return getMonthlyOvertimeForRange(firstOfMonth, today);
     } catch (e) {
       debugPrint('Error in getMonthlyOvertime: $e');
       return 0;
     }
   }
-  
+
   static int getMonthlyOvertimeForRange(DateTime startDate, DateTime endDate) {
     try {
       final allEntries = getAllEntries();
@@ -1234,7 +1234,7 @@ class HiveDb {
       final now = DateTime.now();
       final lastMonthStart = DateTime(now.year, now.month - 1, 1);
       final lastMonthEnd = DateTime(now.year, now.month, 0); // Last day of previous month
-      
+
       return getMonthlyOvertimeForRange(lastMonthStart, lastMonthEnd);
     } catch (e) {
       debugPrint('Error in getLastMonthOvertime: $e');
@@ -1247,40 +1247,40 @@ class HiveDb {
       final workDaysSetting = getWorkDays();
       final dailyTarget = getDailyTargetMinutes();
       int expectedMinutes = 0;
-      
+
       // Iterate through each day in the range
       for (var day = startDate;
           day.isBefore(endDate.add(const Duration(days: 1)));
           day = day.add(const Duration(days: 1))) {
         final weekdayIndex = day.weekday - 1; // 0-based index (0 = Monday)
         final bool isConfiguredWorkDay = workDaysSetting[weekdayIndex];
-        
+
         // Only add target minutes for configured work days
         if (isConfiguredWorkDay) {
           expectedMinutes += dailyTarget;
         }
       }
-      
+
       return expectedMinutes;
     } catch (e) {
       debugPrint('Error in getExpectedWorkMinutesForRange: $e');
       return 0;
     }
   }
-  
+
   static int getCurrentMonthExpectedMinutes() {
     final now = DateTime.now();
     final firstOfMonth = DateTime(now.year, now.month, 1);
     final today = DateTime(now.year, now.month, now.day);
-    
+
     return getExpectedWorkMinutesForRange(firstOfMonth, today);
   }
-  
+
   static int getLastMonthExpectedMinutes() {
     final now = DateTime.now();
     final lastMonthStart = DateTime(now.year, now.month - 1, 1);
     final lastMonthEnd = DateTime(now.year, now.month, 0); // Last day of previous month
-    
+
     return getExpectedWorkMinutesForRange(lastMonthStart, lastMonthEnd);
   }
 
@@ -1314,19 +1314,19 @@ class HiveDb {
   static List<Map<String, dynamic>> getEntriesForRange(DateTime start, DateTime end) {
     final box = Hive.box('work_hours');
     final entries = <Map<String, dynamic>>[];
-    
+
     // Convert dates to start and end of day
     final startDate = DateTime(start.year, start.month, start.day);
     final endDate = DateTime(end.year, end.month, end.day, 23, 59, 59);
-    
+
     // Get all entries
     final allEntries = box.toMap();
-    
+
     // Filter entries within the date range
     allEntries.forEach((key, value) {
       if (value is Map) {
         final entryDate = DateTime.parse(key);
-        if (entryDate.isAfter(startDate.subtract(const Duration(days: 1))) && 
+        if (entryDate.isAfter(startDate.subtract(const Duration(days: 1))) &&
             entryDate.isBefore(endDate.add(const Duration(days: 1)))) {
           // Add the date to the entry map
           final entry = Map<String, dynamic>.from(value);
@@ -1335,14 +1335,14 @@ class HiveDb {
         }
       }
     });
-    
+
     // Sort entries by date
     entries.sort((a, b) {
       final dateA = DateTime.parse(a['date'] as String);
       final dateB = DateTime.parse(b['date'] as String);
       return dateA.compareTo(dateB);
     });
-    
+
     return entries;
   }
 }

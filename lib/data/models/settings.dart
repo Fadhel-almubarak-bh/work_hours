@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 
 part 'settings.g.dart';
@@ -22,6 +23,9 @@ class Settings {
   @HiveField(5)
   final double overtimeRate; // e.g., 1.5 for 150%
 
+  @HiveField(6)
+  final ThemeMode themeMode;
+
   Settings({
     required this.monthlySalary,
     required this.dailyTargetHours,
@@ -29,6 +33,7 @@ class Settings {
     this.currency = 'USD',
     this.insuranceRate = 0.08,
     this.overtimeRate = 1.5,
+    this.themeMode = ThemeMode.system,
   }) : assert(workDays.length == 7, 'Work days must be a list of 7 boolean values');
 
   Map<String, dynamic> toJson() {
@@ -39,6 +44,7 @@ class Settings {
       'currency': currency,
       'insuranceRate': insuranceRate,
       'overtimeRate': overtimeRate,
+      'themeMode': themeMode.toString(),
     };
   }
 
@@ -50,6 +56,7 @@ class Settings {
       currency: json['currency'] as String,
       insuranceRate: json['insuranceRate'] as double,
       overtimeRate: json['overtimeRate'] as double,
+      themeMode: ThemeMode.values[json['themeMode'] as int],
     );
   }
 
@@ -60,6 +67,7 @@ class Settings {
     String? currency,
     double? insuranceRate,
     double? overtimeRate,
+    ThemeMode? themeMode,
   }) {
     return Settings(
       monthlySalary: monthlySalary ?? this.monthlySalary,
@@ -68,6 +76,7 @@ class Settings {
       currency: currency ?? this.currency,
       insuranceRate: insuranceRate ?? this.insuranceRate,
       overtimeRate: overtimeRate ?? this.overtimeRate,
+      themeMode: themeMode ?? this.themeMode,
     );
   }
 
@@ -80,7 +89,8 @@ class Settings {
         _listEquals(other.workDays, workDays) &&
         other.currency == currency &&
         other.insuranceRate == insuranceRate &&
-        other.overtimeRate == overtimeRate;
+        other.overtimeRate == overtimeRate &&
+        other.themeMode == themeMode;
   }
 
   @override
@@ -90,7 +100,8 @@ class Settings {
         _listHashCode(workDays) ^
         currency.hashCode ^
         insuranceRate.hashCode ^
-        overtimeRate.hashCode;
+        overtimeRate.hashCode ^
+        themeMode.hashCode;
   }
 
   bool _listEquals<T>(List<T>? a, List<T>? b) {

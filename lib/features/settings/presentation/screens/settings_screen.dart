@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../settings_controller.dart';
 import '../widgets/settings_widgets.dart';
+import '../../../../data/local/hive_db.dart';
+import '../../../../core/constants/app_constants.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -62,6 +64,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Theme Selection
+                SettingsCard(
+                  title: 'Theme',
+                  child: Column(
+                    children: [
+                      RadioListTile<ThemeMode>(
+                        title: const Text('System'),
+                        value: ThemeMode.system,
+                        groupValue: settings.themeMode,
+                        onChanged: controller.updateThemeMode,
+                      ),
+                      RadioListTile<ThemeMode>(
+                        title: const Text('Light'),
+                        value: ThemeMode.light,
+                        groupValue: settings.themeMode,
+                        onChanged: controller.updateThemeMode,
+                      ),
+                      RadioListTile<ThemeMode>(
+                        title: const Text('Dark'),
+                        value: ThemeMode.dark,
+                        groupValue: settings.themeMode,
+                        onChanged: controller.updateThemeMode,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 // Salary Settings
                 SettingsCard(
                   title: 'Salary Settings',
@@ -120,59 +150,81 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Summary Card
+                // Data Management
                 SettingsCard(
-                  title: 'Summary',
+                  title: 'Data Management',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSummaryRow(
-                        'Monthly Salary',
-                        controller.formatCurrency(settings.monthlySalary),
+                      Text(
+                        'Export your work hours data to Excel or import from a backup.',
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
-                      _buildSummaryRow(
-                        'Daily Rate',
-                        controller.formatCurrency(
-                          settings.monthlySalary / 20, // Assuming 20 work days
-                        ),
-                      ),
-                      _buildSummaryRow(
-                        'Hourly Rate',
-                        controller.formatCurrency(
-                          settings.monthlySalary / (20 * settings.dailyTargetHours),
-                        ),
-                      ),
-                      _buildSummaryRow(
-                        'Insurance Rate',
-                        controller.formatPercentage(settings.insuranceRate),
-                      ),
-                      _buildSummaryRow(
-                        'Overtime Rate',
-                        controller.formatPercentage(settings.overtimeRate),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => controller.exportDataToExcel(context),
+                              icon: const Icon(Icons.save_alt, color: Colors.white),
+                              label: const Text('Export'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context).colorScheme.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => controller.importDataFromExcel(context),
+                              icon: const Icon(Icons.upload_file, color: Colors.white),
+                              label: const Text('Import'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context).colorScheme.secondary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+
+                // Debug Information
+                SettingsCard(
+                  title: 'Debug Information',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'View detailed debug information about the app\'s state and data.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () => controller.printDebugInfo(context),
+                        icon: const Icon(Icons.bug_report, color: Colors.white),
+                        label: const Text('Show Debug Info'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          minimumSize: const Size(double.infinity, 0),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
               ],
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildSummaryRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ],
       ),
     );
   }

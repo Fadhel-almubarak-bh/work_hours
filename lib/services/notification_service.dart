@@ -26,12 +26,20 @@ class NotificationService {
     const LinuxInitializationSettings initializationSettingsLinux =
         LinuxInitializationSettings(defaultActionName: 'Open notification');
 
+    const WindowsInitializationSettings initializationSettingsWindows =
+        WindowsInitializationSettings(
+      appName: 'Work Hours',
+      appUserModelId: 'com.example.work_hours',
+      guid: '12345678-1234-1234-1234-123456789012',
+    );
+
     const InitializationSettings initializationSettings =
         InitializationSettings(
       android: initializationSettingsAndroid,
       iOS: initializationSettingsDarwin,
       macOS: initializationSettingsDarwin,
       linux: initializationSettingsLinux,
+      windows: initializationSettingsWindows,
     );
 
     await _notifications.initialize(

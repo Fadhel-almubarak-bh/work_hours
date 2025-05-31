@@ -228,4 +228,42 @@ class WorkHoursRepository {
       'totalDaysOff': offDaysCount + DateTimeUtils.getNonWorkingDaysInMonth(month, settings.workDays),
     };
   }
+
+  Future<List<WorkEntry>> getAllWorkEntries() async {
+    final entries = <WorkEntry>[];
+    final allEntries = HiveDb.getAllEntries();
+    
+    for (var entry in allEntries.entries) {
+      final date = DateTime.parse(entry.key);
+      entries.add(WorkEntry(
+        date: date,
+        clockIn: entry.value['in'] != null ? DateTime.parse(entry.value['in']) : null,
+        clockOut: entry.value['out'] != null ? DateTime.parse(entry.value['out']) : null,
+        duration: entry.value['duration'] ?? 0,
+        isOffDay: entry.value['offDay'] ?? false,
+        description: entry.value['description'],
+      ));
+    }
+    
+    entries.sort((a, b) => b.date.compareTo(a.date));
+    return entries;
+  }
+
+  Future<void> addWorkEntry({
+    required DateTime date,
+    required DateTime clockIn,
+    DateTime? clockOut,
+    required double hours,
+    required double overtime,
+  }) async {
+    final totalHours = hours + overtime;
+    final entry = WorkEntry(
+      date: date,
+      clockIn: clockIn,
+      clockOut: clockOut,
+      duration: (totalHours * 60).round(),
+      isOffDay: false,
+    );
+    await saveWorkEntry(entry);
+  }
 }

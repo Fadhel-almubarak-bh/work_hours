@@ -23,13 +23,14 @@ class SettingsAdapter extends TypeAdapter<Settings> {
       currency: fields[3] as String,
       insuranceRate: fields[4] as double,
       overtimeRate: fields[5] as double,
+      themeMode: fields[6] as ThemeMode,
     );
   }
 
   @override
   void write(BinaryWriter writer, Settings obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.monthlySalary)
       ..writeByte(1)
@@ -41,7 +42,9 @@ class SettingsAdapter extends TypeAdapter<Settings> {
       ..writeByte(4)
       ..write(obj.insuranceRate)
       ..writeByte(5)
-      ..write(obj.overtimeRate);
+      ..write(obj.overtimeRate)
+      ..writeByte(6)
+      ..write(obj.themeMode);
   }
 
   @override

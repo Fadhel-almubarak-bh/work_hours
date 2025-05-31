@@ -125,7 +125,7 @@ class HomeController extends ChangeNotifier {
           return;
         }
         
-        await HiveDb.exportDataToExcel();
+        await HiveDb.exportDataToExcel(context);
         
         // Hide loading dialog
         if (context.mounted) Navigator.of(context).pop();
@@ -170,7 +170,7 @@ class HomeController extends ChangeNotifier {
           return;
         }
         
-        await HiveDb.importDataFromExcel();
+        await HiveDb.importDataFromExcel(context);
         
         // Hide loading dialog
         if (context.mounted) Navigator.of(context).pop();

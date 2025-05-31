@@ -200,372 +200,64 @@ class HiveDb {
     }
   }
 
-  static Future<void> importDataFromExcel() async {
+  static Future<void> importDataFromExcel(BuildContext context) async {
     try {
-      debugPrint('[EXCEL_IMPORT] Starting Excel import process...');
-
-      // Use a more direct file picker with clearer permission requirements
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx'],
-        dialogTitle: 'Select Excel File to Import',
       );
 
-      if (result == null) {
-        debugPrint('[EXCEL_IMPORT] ⚠️ No file selected.');
-        return;
-      }
+      if (result != null) {
+        final file = File(result.files.single.path!);
+        final bytes = await file.readAsBytes();
+        final excel = Excel.decodeBytes(bytes);
+        final sheet = excel.sheets.values.first;
 
-      final filePath = result.files.single.path;
-      if (filePath == null) {
-        debugPrint('[EXCEL_IMPORT] ⚠️ File path is null.');
-        return;
-      }
-      
-      debugPrint('[EXCEL_IMPORT] Selected file: $filePath');
-      
-      // Verify the file exists
-      final file = File(filePath);
-      if (!await file.exists()) {
-        debugPrint('[EXCEL_IMPORT] ❌ File does not exist: $filePath');
-        throw Exception('File does not exist: $filePath');
-      }
-      
-      // Read file bytes using try-catch to handle potential permission issues
-      Uint8List bytes;
-      try {
-        bytes = await file.readAsBytes();
-        if (bytes.isEmpty) {
-          debugPrint('[EXCEL_IMPORT] ❌ File is empty: $filePath');
-          throw Exception('File is empty');
-        }
-      } catch (e) {
-        debugPrint('[EXCEL_IMPORT] ❌ Error reading file: $e');
-        throw Exception('Cannot read file. Please check app permissions or try selecting a different file location.');
-      }
-      
-      debugPrint('[EXCEL_IMPORT] File read successfully, size: ${bytes.length} bytes');
+        // Skip header row
+        for (var row in sheet.rows.skip(1)) {
+          if (row.length >= 5) {
+            final dateStr = row[0]?.value?.toString() ?? '';
+            final clockInStr = row[1]?.value?.toString() ?? '';
+            final clockOutStr = row[2]?.value?.toString() ?? '';
+            final hoursStr = row[3]?.value?.toString() ?? '0';
+            final overtimeStr = row[4]?.value?.toString() ?? '0';
 
-      final excel = Excel.decodeBytes(bytes);
-      debugPrint('[EXCEL_IMPORT] Excel file decoded successfully');
-
-      // First, process settings sheet if it exists
-      final settingsSheet = excel.tables['Settings'];
-      if (settingsSheet != null) {
-        debugPrint('[EXCEL_IMPORT] Found Settings sheet with ${settingsSheet.rows.length} rows');
-        
-        // Track settings import status
-        Map<String, bool> settingsImportStatus = {
-          'DailyTargetHours': false,
-          'MonthlySalary': false,
-          'WorkDays': false
-        };
-        
-        try {
-          for (var i = 1; i < settingsSheet.rows.length; i++) {
-            final row = settingsSheet.rows[i];
-            if (row.isEmpty || row.length < 2) continue;
-            
-            final settingName = row[0]?.value?.toString();
-            final settingValue = row[1]?.value?.toString();
-            
-            if (settingName == null || settingValue == null) continue;
-            
-            try {
-              if (settingName == 'DailyTargetHours') {
-                final hours = int.tryParse(settingValue);
-                if (hours != null && hours > 0 && hours <= 24) {
-                  await setDailyTargetHours(hours);
-                  settingsImportStatus['DailyTargetHours'] = true;
-                  debugPrint('[EXCEL_IMPORT] ✅ Successfully imported DailyTargetHours: $hours');
-                } else {
-                  debugPrint('[EXCEL_IMPORT] ⚠️ Invalid DailyTargetHours value: $settingValue');
-                }
-              } else if (settingName == 'MonthlySalary') {
-                final salary = double.tryParse(settingValue);
-                if (salary != null && salary >= 0) {
-                  await setMonthlySalary(salary);
-                  settingsImportStatus['MonthlySalary'] = true;
-                  debugPrint('[EXCEL_IMPORT] ✅ Successfully imported MonthlySalary: $salary');
-                } else {
-                  debugPrint('[EXCEL_IMPORT] ⚠️ Invalid MonthlySalary value: $settingValue');
-                }
-              } else if (settingName.startsWith('WorkDay_')) {
-                final dayName = settingName.substring(8); // Remove 'WorkDay_' prefix
-                final isWorkDay = settingValue.toLowerCase() == 'true';
-                final workDays = getWorkDays();
-                final dayIndex = _getDayIndex(dayName);
-                if (dayIndex != -1) {
-                  workDays[dayIndex] = isWorkDay;
-                  await setWorkDays(workDays);
-                  settingsImportStatus['WorkDays'] = true;
-                  debugPrint('[EXCEL_IMPORT] ✅ Successfully imported WorkDay_$dayName: $isWorkDay');
-                } else {
-                  debugPrint('[EXCEL_IMPORT] ⚠️ Invalid day name in WorkDay setting: $dayName');
-                }
-              }
-            } catch (e) {
-              debugPrint('[EXCEL_IMPORT] ❌ Error importing setting $settingName: $e');
-            }
-          }
-          
-          // Log settings import summary
-          debugPrint('[EXCEL_IMPORT] Settings import summary:');
-          settingsImportStatus.forEach((setting, success) {
-            debugPrint('$setting: ${success ? "✅" : "❌"}');
-          });
-          
-        } catch (e) {
-          debugPrint('[EXCEL_IMPORT] ❌ Error processing settings sheet: $e');
-          throw Exception('Error importing settings: $e');
-        }
-      } else {
-        debugPrint('[EXCEL_IMPORT] ⚠️ No Settings sheet found in the Excel file');
-      }
-
-      // Then process work hours sheet
-      final sheet = excel.tables['WorkHours'];
-      if (sheet == null) {
-        debugPrint('[EXCEL_IMPORT] ❌ No "WorkHours" sheet found. Available sheets: ${excel.tables.keys.join(', ')}');
-        throw Exception('No "WorkHours" sheet found in the Excel file. Available sheets: ${excel.tables.keys.join(', ')}');
-      }
-
-      debugPrint('[EXCEL_IMPORT] Found WorkHours sheet with ${sheet.rows.length} rows');
-
-      // Print header row for verification
-      if (sheet.rows.isNotEmpty) {
-        debugPrint('[EXCEL_IMPORT] Header row: ${sheet.rows[0].map((cell) => cell?.value?.toString() ?? 'null').join(', ')}');
-      } else {
-        debugPrint('[EXCEL_IMPORT] ⚠️ Excel file has no rows');
-        throw Exception('Excel file has no data rows');
-      }
-
-      int importedCount = 0;
-      int skippedCount = 0;
-      int errorCount = 0;
-
-      for (var i = 1; i < sheet.rows.length; i++) {
-        final row = sheet.rows[i];
-        debugPrint('[EXCEL_IMPORT] Processing row $i: ${row.map((cell) => cell?.value?.toString() ?? 'null').join(', ')}');
-
-        // Skip empty rows
-        if (row.isEmpty || row.every((cell) => cell?.value == null)) {
-          debugPrint('[EXCEL_IMPORT] Skipping empty row $i');
-          continue;
-        }
-
-        try {
-          final rawDate = row[0]?.value;
-          debugPrint('[EXCEL_IMPORT] Raw date value: $rawDate (${rawDate.runtimeType})');
-
-          String? dateKey;
-          // Always convert to string first to handle SharedString objects
-          String rawDateString = rawDate.toString();
-          debugPrint('[EXCEL_IMPORT] Converted date to string: "$rawDateString"');
-          
-          // Special handling for SharedString type that might come from Excel
-          if (rawDate.runtimeType.toString().contains('SharedString')) {
-            debugPrint('[EXCEL_IMPORT] Detected SharedString type, extracting value');
-            // The format appears to be the actual date we want, so use it directly if it follows yyyy-MM-dd pattern
-            if (rawDateString.length == 10 && rawDateString.contains('-') && 
-                rawDateString.indexOf('-') == 4 && rawDateString.lastIndexOf('-') == 7) {
-              dateKey = rawDateString;
-              debugPrint('[EXCEL_IMPORT] Using SharedString value directly: $dateKey');
-            }
-          } else if (rawDate is DateTime) {
-            dateKey = DateFormat('yyyy-MM-dd').format(rawDate);
-          } else if (rawDateString.isNotEmpty) {
-            // Handle date in common format "2025-05-21" directly
-            if (rawDateString.length == 10 && rawDateString.contains('-')) {
-              if (rawDateString.indexOf('-') == 4 && rawDateString.lastIndexOf('-') == 7) {
-                // Direct match for yyyy-MM-dd format
-                debugPrint('[EXCEL_IMPORT] Found date in yyyy-MM-dd format, using directly: $rawDateString');
-                dateKey = rawDateString;
-              }
-            }
-            
-            // If we don't have a date key yet, try more parsing methods
-            if (dateKey == null) {
-              // Try various date formats
-              DateTime? parsed;
+            if (dateStr.isNotEmpty && clockInStr.isNotEmpty) {
               try {
-                // Try to parse the raw string
-                parsed = DateTime.tryParse(rawDateString);
-                
-                // Try other common formats if direct parse fails
-                if (parsed == null && rawDateString.length >= 10) {
-                  // Try yyyy-MM-dd format with possible time component
-                  if (rawDateString.contains('-') && rawDateString.indexOf('-') == 4) {
-                    final datePart = rawDateString.substring(0, 10);
-                    parsed = DateTime.tryParse(datePart);
-                    if (parsed != null) {
-                      debugPrint('[EXCEL_IMPORT] Parsed from yyyy-MM-dd part: $datePart');
-                    }
-                  }
-                }
-                
-                if (parsed != null) {
-                  dateKey = DateFormat('yyyy-MM-dd').format(parsed);
-                  debugPrint('[EXCEL_IMPORT] Successfully parsed date: $dateKey');
-                } else {
-                  debugPrint('[EXCEL_IMPORT] ❌ Could not parse date from: $rawDateString');
-                  errorCount++;
-                  continue;
-                }
+                final date = DateTime.parse(dateStr);
+                final clockIn = DateTime.parse(clockInStr);
+                final clockOut = clockOutStr.isNotEmpty ? DateTime.parse(clockOutStr) : null;
+                final hours = double.parse(hoursStr);
+                final overtime = double.parse(overtimeStr);
+
+                await addWorkEntry(
+                  date: date,
+                  clockIn: clockIn,
+                  clockOut: clockOut,
+                  hours: hours,
+                  overtime: overtime,
+                );
               } catch (e) {
-                debugPrint('[EXCEL_IMPORT] ❌ Error parsing date: $e');
-                errorCount++;
+                debugPrint('Error parsing row: $e');
                 continue;
               }
             }
           }
+        }
 
-          if (dateKey == null) {
-            debugPrint('[EXCEL_IMPORT] ❌ Could not determine date key for row $i');
-            errorCount++;
-            continue;
-          }
-
-          // Check if we already have an entry for this date
-          final existingEntry = _workHoursBoxInstance.get(dateKey);
-          if (existingEntry != null) {
-            debugPrint('[EXCEL_IMPORT] ⚠️ Skipping existing entry for date: $dateKey');
-            skippedCount++;
-            continue;
-          }
-
-          // Parse clock in time
-          final rawClockIn = row[1]?.value;
-          DateTime? clockIn;
-          if (rawClockIn != null) {
-            try {
-              if (rawClockIn is DateTime) {
-                clockIn = rawClockIn;
-              } else {
-                final clockInString = rawClockIn.toString();
-                if (clockInString.contains(':')) {
-                  // Handle time format (HH:mm)
-                  final timeParts = clockInString.split(':');
-                  if (timeParts.length == 2) {
-                    final hours = int.tryParse(timeParts[0]);
-                    final minutes = int.tryParse(timeParts[1]);
-                    if (hours != null && minutes != null) {
-                      final date = DateTime.parse(dateKey);
-                      clockIn = DateTime(date.year, date.month, date.day, hours, minutes);
-                    }
-                  }
-                }
-              }
-            } catch (e) {
-              debugPrint('[EXCEL_IMPORT] ❌ Error parsing clock in time: $e');
-            }
-          }
-
-          // Parse clock out time
-          final rawClockOut = row[2]?.value;
-          DateTime? clockOut;
-          if (rawClockOut != null) {
-            try {
-              if (rawClockOut is DateTime) {
-                clockOut = rawClockOut;
-              } else {
-                final clockOutString = rawClockOut.toString();
-                if (clockOutString.contains(':')) {
-                  // Handle time format (HH:mm)
-                  final timeParts = clockOutString.split(':');
-                  if (timeParts.length == 2) {
-                    final hours = int.tryParse(timeParts[0]);
-                    final minutes = int.tryParse(timeParts[1]);
-                    if (hours != null && minutes != null) {
-                      final date = DateTime.parse(dateKey);
-                      clockOut = DateTime(date.year, date.month, date.day, hours, minutes);
-                    }
-                  }
-                }
-              }
-            } catch (e) {
-              debugPrint('[EXCEL_IMPORT] ❌ Error parsing clock out time: $e');
-            }
-          }
-
-          // Parse duration
-          final rawDuration = row[3]?.value;
-          int? duration;
-          if (rawDuration != null) {
-            try {
-              if (rawDuration is num) {
-                duration = rawDuration.toInt();
-              } else {
-                final durationString = rawDuration.toString();
-                if (durationString.contains(':')) {
-                  // Handle duration format (HH:mm)
-                  final timeParts = durationString.split(':');
-                  if (timeParts.length == 2) {
-                    final hours = int.tryParse(timeParts[0]);
-                    final minutes = int.tryParse(timeParts[1]);
-                    if (hours != null && minutes != null) {
-                      duration = hours * 60 + minutes;
-                    }
-                  }
-                }
-              }
-            } catch (e) {
-              debugPrint('[EXCEL_IMPORT] ❌ Error parsing duration: $e');
-            }
-          }
-
-          // Parse off day status
-          final rawOffDay = row[4]?.value;
-          bool offDay = false;
-          if (rawOffDay != null) {
-            try {
-              if (rawOffDay is bool) {
-                offDay = rawOffDay;
-              } else {
-                final offDayString = rawOffDay.toString().toLowerCase();
-                offDay = offDayString == 'true' || offDayString == 'yes' || offDayString == '1';
-              }
-            } catch (e) {
-              debugPrint('[EXCEL_IMPORT] ❌ Error parsing off day status: $e');
-            }
-          }
-
-          // Parse description
-          final rawDescription = row[5]?.value;
-          String? description;
-          if (rawDescription != null) {
-            description = rawDescription.toString();
-          }
-
-          // Create the entry
-          final entry = {
-            'in': clockIn?.toIso8601String(),
-            'out': clockOut?.toIso8601String(),
-            'duration': duration,
-            'offDay': offDay,
-            'description': description,
-          };
-
-          // Save the entry
-          await _workHoursBoxInstance.put(dateKey, entry);
-          importedCount++;
-          debugPrint('[EXCEL_IMPORT] ✅ Successfully imported entry for $dateKey');
-
-        } catch (e) {
-          debugPrint('[EXCEL_IMPORT] ❌ Error processing row $i: $e');
-          errorCount++;
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Data imported successfully')),
+          );
         }
       }
-
-      // Log import summary
-      debugPrint('[EXCEL_IMPORT] Import completed:');
-      debugPrint('✅ Successfully imported: $importedCount entries');
-      debugPrint('⚠️ Skipped (existing): $skippedCount entries');
-      debugPrint('❌ Errors: $errorCount entries');
-
     } catch (e) {
-      debugPrint('[EXCEL_IMPORT] ❌ Error during import: $e');
-      rethrow;
+      debugPrint('Error importing data: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error importing data: $e')),
+        );
+      }
     }
   }
 
@@ -737,7 +429,11 @@ class HiveDb {
   static Future<void> deleteEntry(String dateKey) async {
     try {
       await _workHoursBoxInstance.delete(dateKey);
-      await _syncTodayEntry();
+      
+      // Only sync with widget on supported platforms
+      if (Platform.isAndroid || Platform.isIOS) {
+        await _syncTodayEntry();
+      }
     } catch (e) {
       debugPrint('Error in deleteEntry: $e');
       rethrow;
@@ -747,7 +443,14 @@ class HiveDb {
   static Map<String, dynamic>? getEntry(DateTime date) {
     try {
       final dateKey = DateFormat('yyyy-MM-dd').format(date);
-      return _workHoursBoxInstance.get(dateKey);
+      final entry = _workHoursBoxInstance.get(dateKey);
+      if (entry == null) return null;
+      
+      // Ensure the entry is properly typed
+      if (entry is Map) {
+        return Map<String, dynamic>.from(entry);
+      }
+      return null;
     } catch (e) {
       debugPrint('Error in getEntry: $e');
       return null;
@@ -980,6 +683,11 @@ class HiveDb {
   // Widget Sync
   static Future<void> _syncTodayEntry() async {
     try {
+      // Only sync with widget on supported platforms
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        return;
+      }
+
       final today = DateTime.now();
       final dateKey = DateFormat('yyyy-MM-dd').format(today);
       final entry = _workHoursBoxInstance.get(dateKey);
@@ -1046,85 +754,73 @@ class HiveDb {
     return _settingsBoxInstance.listenable();
   }
 
-  static Future<String> exportDataToExcel() async {
+  static Future<String> exportDataToExcel(BuildContext context) async {
     try {
-      debugPrint('[EXCEL_EXPORT] Starting Excel export process...');
+      final result = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Excel File',
+        fileName: 'work_hours_export.xlsx',
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+      );
 
-      // Create a new Excel document
-      final excel = Excel.createExcel();
-
-      // Create Settings sheet
-      final settingsSheet = excel['Settings'];
-      
-      // Add headers
-      settingsSheet.appendRow(['Setting', 'Value']);
-      
-      // Export settings
-      settingsSheet.appendRow(['DailyTargetHours', getDailyTargetHours().toString()]);
-      settingsSheet.appendRow(['MonthlySalary', getMonthlySalary().toString()]);
-      
-      // Export work days
-      final workDays = getWorkDays();
-      final dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-      for (var i = 0; i < workDays.length; i++) {
-        settingsSheet.appendRow(['WorkDay_${dayNames[i]}', workDays[i].toString()]);
+      if (result == null) {
+        throw Exception('No file path selected');
       }
 
-      // Create WorkHours sheet
-      final workHoursSheet = excel['WorkHours'];
-      
+      final excel = Excel.createExcel();
+      final sheet = excel.sheets.values.first;
+
       // Add headers
-      workHoursSheet.appendRow(['Date', 'Clock In', 'Clock Out', 'Duration', 'Off Day', 'Description']);
+      sheet.appendRow([
+        TextCellValue('Date'),
+        TextCellValue('Clock In'),
+        TextCellValue('Clock Out'),
+        TextCellValue('Hours'),
+        TextCellValue('Overtime'),
+      ]);
+
+      // Get work entries
+      final entries = getAllWorkEntries();
+      final settings = getSettings();
+      final dailyTargetHours = settings['dailyTargetHours'] as int? ?? 8;
       
-      // Get all work hours entries
-      final allEntries = _workHoursBoxInstance.toMap();
-      
-      // Sort entries by date
-      final sortedDates = allEntries.keys.toList()
-        ..sort((a, b) => b.compareTo(a)); // Sort in descending order
-      
-      // Export each entry
-      for (final dateKey in sortedDates) {
-        final entry = allEntries[dateKey];
-        if (entry == null) continue;
-        
-        final clockIn = entry['in'] as String?;
-        final clockOut = entry['out'] as String?;
-        final duration = entry['duration'] as int?;
-        final offDay = entry['offDay'] as bool? ?? false;
-        final description = entry['description'] as String?;
-        
-        workHoursSheet.appendRow([
-          dateKey,
-          clockIn ?? '',
-          clockOut ?? '',
-          duration?.toString() ?? '',
-          offDay.toString(),
-          description ?? '',
+      for (final entry in entries) {
+        final totalHours = (entry['duration'] as int) / 60.0;
+        final overtime = totalHours > dailyTargetHours ? totalHours - dailyTargetHours : 0.0;
+        final regularHours = totalHours - overtime;
+
+        sheet.appendRow([
+          TextCellValue(entry['date'].toString()),
+          TextCellValue(entry['clockIn']?.toString() ?? ''),
+          TextCellValue(entry['clockOut']?.toString() ?? ''),
+          TextCellValue(regularHours.toStringAsFixed(2)),
+          TextCellValue(overtime.toStringAsFixed(2)),
         ]);
       }
 
-      // Get the documents directory
-      final directory = await getApplicationDocumentsDirectory();
-      final now = DateTime.now();
-      final fileName = 'work_hours_export_${DateFormat('yyyyMMdd_HHmmss').format(now)}.xlsx';
-      final filePath = '${directory.path}/$fileName';
-      
-      // Save the Excel file
-      final fileBytes = excel.encode();
-      if (fileBytes == null) {
+      // Save the file
+      final bytes = excel.encode();
+      if (bytes == null) {
         throw Exception('Failed to encode Excel file');
       }
+
+      final file = File(result);
+      await file.writeAsBytes(bytes);
       
-      final file = File(filePath);
-      await file.writeAsBytes(fileBytes);
-      
-      debugPrint('[EXCEL_EXPORT] ✅ Excel file exported successfully to: $filePath');
-      
-      // Return the file path for further use (e.g., sharing)
-      return filePath;
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Data exported successfully')),
+        );
+      }
+
+      return result;
     } catch (e) {
-      debugPrint('[EXCEL_EXPORT] ❌ Error exporting to Excel: $e');
+      debugPrint('Error exporting data: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error exporting data: $e')),
+        );
+      }
       rethrow;
     }
   }
@@ -1164,6 +860,57 @@ class HiveDb {
     } catch (e, stackTrace) {
       debugPrint('[WORK_HOURS] ❌ Error printing Hive DB entries: $e');
       debugPrint(stackTrace.toString());
+    }
+  }
+
+  static Future<void> addWorkEntry({
+    required DateTime date,
+    required DateTime clockIn,
+    DateTime? clockOut,
+    required double hours,
+    required double overtime,
+  }) async {
+    try {
+      final dateKey = DateFormat('yyyy-MM-dd').format(date);
+      final totalMinutes = ((hours + overtime) * 60).round();
+      
+      await _workHoursBoxInstance.put(dateKey, {
+        'in': clockIn.toIso8601String(),
+        'out': clockOut?.toIso8601String(),
+        'duration': totalMinutes,
+        'offDay': false,
+        'description': null,
+      });
+      await _syncTodayEntry();
+    } catch (e) {
+      debugPrint('Error in addWorkEntry: $e');
+      rethrow;
+    }
+  }
+
+  static List<Map<String, dynamic>> getAllWorkEntries() {
+    try {
+      final entries = <Map<String, dynamic>>[];
+      final allEntries = _workHoursBoxInstance.toMap();
+      
+      for (var entry in allEntries.entries) {
+        final date = DateTime.parse(entry.key);
+        final value = entry.value as Map<String, dynamic>;
+        
+        entries.add({
+          'date': date,
+          'clockIn': value['in'] != null ? DateTime.parse(value['in']) : null,
+          'clockOut': value['out'] != null ? DateTime.parse(value['out']) : null,
+          'duration': value['duration'] as int? ?? 0,
+          'offDay': value['offDay'] as bool? ?? false,
+          'description': value['description'] as String?,
+        });
+      }
+      
+      return entries;
+    } catch (e) {
+      debugPrint('Error in getAllWorkEntries: $e');
+      return [];
     }
   }
 

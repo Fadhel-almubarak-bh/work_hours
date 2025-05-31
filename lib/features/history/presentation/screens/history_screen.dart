@@ -103,7 +103,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           duration: duration,
         );
         await controller.deleteEntry(entry);
-        setState(() {
+    setState(() {
           _loadEvents();
         });
         if (context.mounted) {
@@ -216,44 +216,44 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-                  child: Row(
+                child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
+                  children: [
                       _LegendItem(
                         color: Colors.green,
                         label: 'Completed',
-                      ),
+                    ),
                       _LegendItem(
                         color: Colors.orange,
                         label: 'In Progress',
-                      ),
+                    ),
                       _LegendItem(
                         color: Colors.blue,
                         label: 'Off Day',
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                
+              ),
+              
                 // Entry details section
                 if (selectedEntry != null) ...[
                   Divider(height: 1, thickness: 1, color: Colors.grey[300]),
                   Container(
-                    padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(16.0),
                     width: double.infinity,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
+                  children: [
                             Expanded(
                               child: Text(
                                 _selectedDay != null
                                     ? DateFormat('EEEE, MMMM d, yyyy').format(_selectedDay!)
                                     : '',
                                 style: Theme.of(context).textTheme.titleLarge,
-                              ),
+                    ),
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete),
@@ -266,13 +266,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               tooltip: 'Delete Entry',
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 16),
-                        _buildEntryDetailsCard(selectedEntry),
-                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                        _buildEntryDetailsCard(selectedEntry),
+                  ],
+                ),
+              ),
+            ],
               ],
             ),
           );
@@ -296,9 +296,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
             Row(
               children: [
                 Container(
@@ -312,21 +312,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             : Colors.orange.withOpacity(0.3),
                     shape: BoxShape.circle,
                   ),
-                ),
+                  ),
                 const SizedBox(width: 8),
-                Text(
+                  Text(
                   isOffDay 
                       ? 'Off Day${description != null ? " - $description" : ""}' 
                       : entry['out'] != null 
                           ? 'Completed' 
                           : 'In Progress',
                   style: const TextStyle(
-                    fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.bold,
                     fontSize: 16,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
             const SizedBox(height: 12),
             if (!isOffDay) ...[
               _buildInfoRow('Clock In', clockInStr),

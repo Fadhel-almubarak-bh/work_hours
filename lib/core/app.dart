@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
+import 'dart:io';
 import '../data/repositories/work_hours_repository.dart';
 import '../data/models/work_entry.dart';
 import '../data/models/settings.dart';
@@ -14,23 +15,32 @@ import '../features/summary/summary_controller.dart';
 import '../features/home/presentation/screens/home_screen.dart';
 import '../services/notification_service.dart';
 import '../services/widget_service.dart';
+import '../services/windows_tray_service.dart';
 import 'theme/theme.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
 
   static WorkHoursRepository? _repository;
+  static bool _isInitialized = false;
 
   static Future<void> initialize() async {
+    if (_isInitialized) return;
+    
     // Initialize timezone data
     tz.initializeTimeZones();
     
     // Initialize Hive
     await Hive.initFlutter();
+
     
     // Register Hive adapters
-    Hive.registerAdapter(WorkEntryAdapter());
-    Hive.registerAdapter(SettingsAdapter());
+    if (!Hive.isAdapterRegistered(1)) {
+      Hive.registerAdapter(WorkEntryAdapter());
+    }
+    if (!Hive.isAdapterRegistered(2)) {
+      Hive.registerAdapter(SettingsAdapter());
+    }
     
     // Initialize repository
     _repository = WorkHoursRepository();
@@ -38,7 +48,15 @@ class App extends StatelessWidget {
 
     // Initialize services
     await NotificationService.initialize();
-    await WidgetService.initialize();
+    
+    // Initialize platform-specific services
+    if (Platform.isWindows) {
+      await WindowsTrayService.initialize();
+    } else if (Platform.isAndroid || Platform.isIOS) {
+      await WidgetService.initialize();
+    }
+    
+    _isInitialized = true;
   }
 
   @override
@@ -80,6 +98,7 @@ class App extends StatelessWidget {
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return MaterialApp(
+            debugShowCheckedModeBanner: false,
             title: 'Work Hours',
             theme: themeProvider.lightTheme,
             darkTheme: themeProvider.darkTheme,
