@@ -38,7 +38,12 @@ class DataManager {
   }
 
   Future<void> deleteWorkEntry(DateTime date) async {
-    await _repository.deleteWorkEntry(date);
+    final entry = WorkEntry(
+      date: date,
+      duration: 0,
+      isOffDay: false,
+    );
+    await _repository.deleteWorkEntry(entry);
   }
 
   // Statistics operations

@@ -4,7 +4,7 @@ import 'dart:io' show Platform;
 import '../data/local/hive_db.dart';
 
 class WidgetService {
-  static const String appWidgetProvider = 'WorkHoursWidgetProvider';
+  static const String appWidgetProvider = 'MyHomeWidgetProvider';
   static const String clockInOutAction = 'clockInOut';
   static const String updateWidgetAction = 'updateWidget';
 
@@ -55,23 +55,60 @@ class WidgetService {
     if (!isWidgetSupported) return;
 
     try {
+      debugPrint('🔍 [WIDGET_DEBUG] Handling widget action: $action');
+      
       switch (action) {
-        case clockInOutAction:
-          if (HiveDb.isClockedIn()) {
-            await HiveDb.clockOut(DateTime.now());
-          } else {
+        case 'clock_in':
+          if (!HiveDb.isClockedIn()) {
+            debugPrint('🔍 [WIDGET_DEBUG] Clocking in...');
             await HiveDb.clockIn(DateTime.now());
+            debugPrint('✅ [WIDGET_DEBUG] Clocked in successfully');
+            
+            // Update widget data
+            await HomeWidget.saveWidgetData('isClockedIn', true);
+            await HomeWidget.saveWidgetData('clockIn', DateTime.now().toString());
+            await HomeWidget.saveWidgetData('clockOut', null);
+            debugPrint('✅ [WIDGET_DEBUG] Widget data updated for clock in');
+          } else {
+            debugPrint('⚠️ [WIDGET_DEBUG] Already clocked in');
           }
-          await updateWidget();
           break;
+          
+        case 'clock_out':
+          if (HiveDb.isClockedIn()) {
+            debugPrint('🔍 [WIDGET_DEBUG] Clocking out...');
+            await HiveDb.clockOut(DateTime.now());
+            debugPrint('✅ [WIDGET_DEBUG] Clocked out successfully');
+            
+            // Update widget data
+            await HomeWidget.saveWidgetData('isClockedIn', false);
+            await HomeWidget.saveWidgetData('clockOut', DateTime.now().toString());
+            debugPrint('✅ [WIDGET_DEBUG] Widget data updated for clock out');
+          } else {
+            debugPrint('⚠️ [WIDGET_DEBUG] Not clocked in');
+          }
+          break;
+          
         case updateWidgetAction:
+          debugPrint('🔍 [WIDGET_DEBUG] Updating widget...');
           await updateWidget();
+          debugPrint('✅ [WIDGET_DEBUG] Widget updated');
           break;
+          
         default:
-          debugPrint('⚠️ Unknown widget action: $action');
+          debugPrint('⚠️ [WIDGET_DEBUG] Unknown widget action: $action');
       }
+      
+      // Force widget update
+      await HomeWidget.updateWidget(
+        iOSName: appWidgetProvider,
+        androidName: appWidgetProvider,
+      );
+      debugPrint('✅ [WIDGET_DEBUG] Widget update triggered');
+      
     } catch (e) {
-      debugPrint('❌ Error handling widget action: $e');
+      debugPrint('❌ [WIDGET_DEBUG] Error handling widget action: $e');
+      debugPrint('❌ [WIDGET_DEBUG] Error details: ${e.toString()}');
     }
   }
 }

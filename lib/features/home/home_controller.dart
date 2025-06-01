@@ -72,12 +72,15 @@ class HomeController extends ChangeNotifier {
     }
   }
 
-  Future<void> markOffDay(DateTime date) async {
+  Future<void> markOffDay(DateTime date, {String? description}) async {
     try {
+      final dailyTargetHours = HiveDb.getDailyTargetHours();
+      final dailyTargetMinutes = dailyTargetHours * 60; // Convert hours to minutes
       final entry = WorkEntry(
         date: date,
-        duration: 0,
+        duration: dailyTargetMinutes,
         isOffDay: true,
+        description: description,
       );
       
       await _repository.saveWorkEntry(entry);

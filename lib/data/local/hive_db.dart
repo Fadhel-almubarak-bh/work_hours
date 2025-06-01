@@ -12,6 +12,7 @@ import 'package:excel/excel.dart'; // Add this import
 import 'package:file_picker/file_picker.dart'; // If you plan to import from user file
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
+import '../models/work_entry.dart'; // Add this import
 
 // Helper function (can be moved to a utility file if preferred)
 String _formatDurationForWidgetDb(int totalMinutes) {
@@ -426,18 +427,10 @@ class HiveDb {
     }
   }
 
-  static Future<void> deleteEntry(String dateKey) async {
-    try {
-      await _workHoursBoxInstance.delete(dateKey);
-      
-      // Only sync with widget on supported platforms
-      if (Platform.isAndroid || Platform.isIOS) {
-        await _syncTodayEntry();
-      }
-    } catch (e) {
-      debugPrint('Error in deleteEntry: $e');
-      rethrow;
-    }
+  static Future<void> deleteEntry(DateTime date) async {
+    final dateKey = DateFormat('yyyy-MM-dd').format(date);
+    final box = await Hive.openBox('work_hours');
+    await box.delete(dateKey);
   }
 
   static Map<String, dynamic>? getEntry(DateTime date) {
@@ -740,13 +733,43 @@ class HiveDb {
   }
 
   static Future<void> deleteAllEntries() async {
-    try {
-      await _workHoursBoxInstance.clear();
-    } catch (e) {
-      debugPrint('Error in deleteAllEntries: $e');
-      rethrow;
-    }
+    final box = await Hive.openBox('work_hours');
+    await box.clear();
   }
+
+  static List<Map<String, dynamic>> getEntriesForRange(DateTime startDate, DateTime endDate) {
+    final box = Hive.box('work_hours');
+    final entries = <Map<String, dynamic>>[];
+    
+    for (var day = startDate; day.isBefore(endDate.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+      final dateKey = DateFormat('yyyy-MM-dd').format(day);
+      final data = box.get(dateKey);
+      if (data != null) {
+        entries.add({
+          'date': dateKey,
+          ...data,
+        });
+      }
+    }
+    
+    return entries;
+  }
+
+  static Future<void> saveWorkEntry(WorkEntry entry) async {
+    final dateKey = DateFormat('yyyy-MM-dd').format(entry.date);
+    final box = await Hive.openBox('work_hours');
+    
+    final data = {
+      'in': entry.clockIn?.toIso8601String(),
+      'out': entry.clockOut?.toIso8601String(),
+      'duration': entry.duration,
+      'offDay': entry.isOffDay,
+      'description': entry.description,
+    };
+    
+    await box.put(dateKey, data);
+  }
+
   static ValueListenable<Box> getWorkHoursListenable() {
     return _workHoursBoxInstance.listenable();
   }

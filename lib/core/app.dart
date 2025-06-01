@@ -32,7 +32,6 @@ class App extends StatelessWidget {
     
     // Initialize Hive
     await Hive.initFlutter();
-
     
     // Register Hive adapters
     if (!Hive.isAdapterRegistered(1)) {
@@ -41,6 +40,10 @@ class App extends StatelessWidget {
     if (!Hive.isAdapterRegistered(2)) {
       Hive.registerAdapter(SettingsAdapter());
     }
+    
+    // Open Hive boxes
+    await Hive.openBox('work_entries');
+    await Hive.openBox('settings');
     
     // Initialize repository
     _repository = WorkHoursRepository();
@@ -54,6 +57,23 @@ class App extends StatelessWidget {
       await WindowsTrayService.initialize();
     } else if (Platform.isAndroid || Platform.isIOS) {
       await WidgetService.initialize();
+      
+      // Check for widget action when app is launched
+      try {
+        final widgetAction = await HomeWidget.getWidgetData<String>('action');
+        debugPrint('🔍 [WIDGET_DEBUG] Checking for widget action on launch: $widgetAction');
+        
+        if (widgetAction != null) {
+          debugPrint('🔍 [WIDGET_DEBUG] Processing widget action: $widgetAction');
+          await WidgetService.handleWidgetAction(widgetAction);
+          // Clear the action after handling
+          await HomeWidget.saveWidgetData('action', null);
+          debugPrint('✅ [WIDGET_DEBUG] Widget action processed and cleared');
+        }
+      } catch (e) {
+        debugPrint('❌ [WIDGET_DEBUG] Error handling widget action: $e');
+        debugPrint('❌ [WIDGET_DEBUG] Error details: ${e.toString()}');
+      }
     }
     
     _isInitialized = true;

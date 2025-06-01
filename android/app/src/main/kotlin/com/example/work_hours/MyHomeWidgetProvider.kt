@@ -24,6 +24,7 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         private const val PAGE_SUMMARY = 1
         private const val PAGE_SETTINGS = 2
         private const val TRANSPARENCY_STEP = 10
+        private const val MAX_NAVIGATION_PAGE = PAGE_SUMMARY  // Maximum page for next/previous navigation
 
         fun exitSettingsMode(context: Context) {
             try {
@@ -136,13 +137,23 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
                         views.setTextViewText(R.id.widget_work_days, "Work Days: $workDays")
                     }
                     PAGE_SETTINGS -> {
-                        // Update transparency settings
-                        views.setTextViewText(R.id.widget_transparency_value, "$transparency%")
+                        // Load transparency controls layout
+                        val transparencyViews = RemoteViews(context.packageName, R.layout.widget_transparency_controls)
                         
-                        // Apply transparency to the widget background
-                        val alpha = (transparency * 255 / 100).toInt()
-                        val color = Color.argb(alpha, 255, 255, 255)
-                        views.setInt(R.id.widget_background, "setBackgroundColor", color)
+                        // Set up transparency control click listeners
+                        transparencyViews.setOnClickPendingIntent(R.id.transparency_level_0, createPendingIntent(context, "transparency_20", appWidgetId))
+                        transparencyViews.setOnClickPendingIntent(R.id.transparency_level_1, createPendingIntent(context, "transparency_40", appWidgetId))
+                        transparencyViews.setOnClickPendingIntent(R.id.transparency_level_2, createPendingIntent(context, "transparency_60", appWidgetId))
+                        transparencyViews.setOnClickPendingIntent(R.id.transparency_level_3, createPendingIntent(context, "transparency_80", appWidgetId))
+                        transparencyViews.setOnClickPendingIntent(R.id.transparency_level_4, createPendingIntent(context, "transparency_100", appWidgetId))
+                        transparencyViews.setOnClickPendingIntent(R.id.widget_button_save_settings, createPendingIntent(context, "save_settings", appWidgetId))
+                        
+                        // Hide the cancel button
+                        transparencyViews.setViewVisibility(R.id.widget_button_close_settings, View.GONE)
+                        
+                        // Replace the settings content with transparency controls
+                        views.removeAllViews(R.id.widget_settings_content)
+                        views.addView(R.id.widget_settings_content, transparencyViews)
                     }
                 }
                 
@@ -156,33 +167,67 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
     }
 
     private fun setupClickListeners(context: Context, views: RemoteViews, prefs: SharedPreferences) {
+        Log.d(TAG, "Setting up click listeners")
+        
+        // Get the app widget ID
+        val appWidgetManager = AppWidgetManager.getInstance(context)
+        val thisWidget = ComponentName(context, MyHomeWidgetProvider::class.java)
+        val appWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget)
+        val appWidgetId = appWidgetIds.firstOrNull() ?: AppWidgetManager.INVALID_APPWIDGET_ID
+        
+        Log.d(TAG, "Setting up click listeners for widget ID: $appWidgetId")
+        
         // Navigation buttons
-        views.setOnClickPendingIntent(R.id.widget_button_previous, createPendingIntent(context, "previous"))
-        views.setOnClickPendingIntent(R.id.widget_button_next, createPendingIntent(context, "next"))
-        views.setOnClickPendingIntent(R.id.widget_button_settings, createPendingIntent(context, "settings"))
-        views.setOnClickPendingIntent(R.id.widget_button_back, createPendingIntent(context, "back"))
+        views.setOnClickPendingIntent(R.id.widget_button_previous, createPendingIntent(context, "previous", appWidgetId))
+        views.setOnClickPendingIntent(R.id.widget_button_next, createPendingIntent(context, "next", appWidgetId))
+        views.setOnClickPendingIntent(R.id.widget_button_settings, createPendingIntent(context, "settings", appWidgetId))
+        views.setOnClickPendingIntent(R.id.widget_button_back, createPendingIntent(context, "back", appWidgetId))
+        
+        Log.d(TAG, "Navigation button click listeners set up")
         
         // Theme controls
-        views.setOnClickPendingIntent(R.id.widget_theme_previous, createPendingIntent(context, "theme_previous"))
-        views.setOnClickPendingIntent(R.id.widget_theme_next, createPendingIntent(context, "theme_next"))
+        views.setOnClickPendingIntent(R.id.widget_theme_previous, createPendingIntent(context, "theme_previous", appWidgetId))
+        views.setOnClickPendingIntent(R.id.widget_theme_next, createPendingIntent(context, "theme_next", appWidgetId))
         
         // Transparency controls
-        views.setOnClickPendingIntent(R.id.widget_transparency_decrease, createPendingIntent(context, "transparency_decrease"))
-        views.setOnClickPendingIntent(R.id.widget_transparency_increase, createPendingIntent(context, "transparency_increase"))
+        views.setOnClickPendingIntent(R.id.widget_transparency_decrease, createPendingIntent(context, "transparency_decrease", appWidgetId))
+        views.setOnClickPendingIntent(R.id.widget_transparency_increase, createPendingIntent(context, "transparency_increase", appWidgetId))
         
         // Clock button
-        views.setOnClickPendingIntent(R.id.widget_clock_button, createPendingIntent(context, "clock"))
+        views.setOnClickPendingIntent(R.id.widget_clock_button, createPendingIntent(context, "clock", appWidgetId))
+        
+        Log.d(TAG, "All click listeners set up")
+    }
+
+    private fun createPendingIntent(context: Context, action: String, appWidgetId: Int): android.app.PendingIntent {
+        val intent = Intent(context, MyHomeWidgetProvider::class.java).apply {
+            this.action = action
+            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+        }
+        return android.app.PendingIntent.getBroadcast(
+            context,
+            action.hashCode(),
+            intent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         
+        Log.d(TAG, "Received intent action: ${intent.action}")
+        
         val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
-        if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return
+        if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+            Log.e(TAG, "Invalid app widget ID")
+            return
+        }
         
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         var currentPage = prefs.getInt(KEY_PAGE, PAGE_MAIN)
         var transparency = prefs.getInt(KEY_TRANSPARENCY, 100)
+        
+        Log.d(TAG, "Current page: $currentPage, Transparency: $transparency")
         
         when (intent.action) {
             "previous" -> {
@@ -192,14 +237,17 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
                 }
             }
             "next" -> {
-                if (currentPage < PAGE_SETTINGS) {
+                if (currentPage < MAX_NAVIGATION_PAGE) {  // Only allow navigation up to summary page
                     prefs.edit().putInt(KEY_PAGE, currentPage + 1).apply()
                     updateWidget(context)
                 }
             }
             "settings" -> {
+                Log.d(TAG, "Settings action received")
                 prefs.edit().putInt(KEY_PAGE, PAGE_SETTINGS).apply()
+                Log.d(TAG, "Updated page to settings")
                 updateWidget(context)
+                Log.d(TAG, "Widget updated after settings action")
             }
             "back" -> {
                 prefs.edit().putInt(KEY_PAGE, PAGE_MAIN).apply()
@@ -237,12 +285,45 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
                 // Handle clock in/out action
                 HomeWidgetPlugin.getData(context)?.let { data ->
                     val isClockedIn = data.getBoolean("isClockedIn", false)
-                    if (isClockedIn) {
-                        HomeWidgetPlugin.saveData(context, "action", "clock_out")
-                    } else {
-                        HomeWidgetPlugin.saveData(context, "action", "clock_in")
+                    val action = if (isClockedIn) "clock_out" else "clock_in"
+                    
+                    // Save the action to be handled by the app
+                    HomeWidgetPlugin.saveData(context, "action", action)
+                    Log.d(TAG, "Saved widget action: $action")
+                    
+                    // Launch the Flutter app
+                    val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                    launchIntent?.let {
+                        it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        it.putExtra("widget_action", action)
+                        context.startActivity(it)
+                        Log.d(TAG, "Launched app with action: $action")
                     }
                 }
+            }
+            "transparency_20" -> {
+                prefs.edit().putInt(KEY_TRANSPARENCY, 20).apply()
+                updateWidget(context)
+            }
+            "transparency_40" -> {
+                prefs.edit().putInt(KEY_TRANSPARENCY, 40).apply()
+                updateWidget(context)
+            }
+            "transparency_60" -> {
+                prefs.edit().putInt(KEY_TRANSPARENCY, 60).apply()
+                updateWidget(context)
+            }
+            "transparency_80" -> {
+                prefs.edit().putInt(KEY_TRANSPARENCY, 80).apply()
+                updateWidget(context)
+            }
+            "transparency_100" -> {
+                prefs.edit().putInt(KEY_TRANSPARENCY, 100).apply()
+                updateWidget(context)
+            }
+            "save_settings" -> {
+                prefs.edit().putInt(KEY_PAGE, PAGE_MAIN).apply()
+                updateWidget(context)
             }
         }
     }
@@ -252,18 +333,6 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         val thisWidget = ComponentName(context, MyHomeWidgetProvider::class.java)
         val appWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget)
         onUpdate(context, appWidgetManager, appWidgetIds)
-    }
-
-    private fun createPendingIntent(context: Context, action: String): android.app.PendingIntent {
-        val intent = Intent(context, MyHomeWidgetProvider::class.java).apply {
-            this.action = action
-        }
-        return android.app.PendingIntent.getBroadcast(
-            context,
-            action.hashCode(),
-            intent,
-            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-        )
     }
 
     override fun onEnabled(context: Context) {

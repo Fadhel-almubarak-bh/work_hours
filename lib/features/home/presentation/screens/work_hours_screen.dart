@@ -629,19 +629,53 @@ class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAli
       debugPrint('🕒 Using current time for off day: $usedTime');
     }
 
-    await controller.markOffDay(usedTime);
+    // Show dialog to select off day type
+    final description = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Off Day Type'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.medical_services),
+              title: const Text('Sick Leave'),
+              onTap: () => Navigator.pop(context, 'Sick Leave'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.celebration),
+              title: const Text('Public Holiday'),
+              onTap: () => Navigator.pop(context, 'Public Holiday'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.event_busy),
+              title: const Text('Annual Leave'),
+              onTap: () => Navigator.pop(context, 'Annual Leave'),
+            ),
+          ],
+        ),
+      ),
+    );
 
-    setState(() {
-      clockInTime = null;
-      clockOutTime = null;
-      selectedDate = null;
-      isCustomTimeSelected = false;
-      customTime = null;
-      
-      // Reset displays to current time
-      final now = DateTime.now();
-      currentTimeString = DateFormat('HH:mm:ss').format(now);
-      currentDateString = DateFormat('yyyy-MM-dd').format(now);
-    });
+    if (description != null && mounted) {
+      await controller.markOffDay(usedTime, description: description);
+
+      setState(() {
+        selectedDate = null;
+        isCustomTimeSelected = false;
+        customTime = null;
+        
+        // Reset displays to current time
+        final now = DateTime.now();
+        currentTimeString = DateFormat('HH:mm:ss').format(now);
+        currentDateString = DateFormat('yyyy-MM-dd').format(now);
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$description marked with 8 hours for ${DateFormat('yyyy-MM-dd').format(usedTime)}')),
+        );
+      }
+    }
   }
 } 

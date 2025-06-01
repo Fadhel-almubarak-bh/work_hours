@@ -14,30 +14,20 @@ class WorkHoursRepository {
 
   // Work Entry Methods
   Future<void> saveWorkEntry(WorkEntry entry) async {
-    final dateKey = entry.date.toIso8601String();
-    await HiveDb.clockIn(entry.clockIn ?? entry.date);
-    if (entry.clockOut != null) {
-      await HiveDb.clockOut(entry.clockOut!);
-    }
-    if (entry.isOffDay) {
-      await HiveDb.setOffDay(entry.date, true, description: entry.description);
-    }
-    if (entry.description != null) {
-      await HiveDb.setDescription(entry.date, entry.description!);
-    }
+    await HiveDb.saveWorkEntry(entry);
   }
 
   Future<WorkEntry?> getWorkEntry(DateTime date) async {
     final data = HiveDb.getDayEntry(date);
     if (data == null) return null;
-    
+
     return WorkEntry(
       date: date,
-      clockIn: data['in'] != null ? DateTime.parse(data['in']) : null,
-      clockOut: data['out'] != null ? DateTime.parse(data['out']) : null,
-      duration: data['duration'] ?? 0,
-      isOffDay: data['offDay'] ?? false,
-      description: data['description'],
+      clockIn: data['in'] != null ? DateTime.parse(data['in'] as String) : null,
+      clockOut: data['out'] != null ? DateTime.parse(data['out'] as String) : null,
+      duration: data['duration'] as int? ?? 0,
+      isOffDay: data['offDay'] as bool? ?? false,
+      description: data['description'] as String?,
     );
   }
 
@@ -64,13 +54,27 @@ class WorkHoursRepository {
     return entries;
   }
 
-  Future<List<WorkEntry>> getWorkEntriesForRange(DateTime start, DateTime end) async {
-    return getWorkEntries(start, end);
+  Future<List<WorkEntry>> getWorkEntriesForRange(DateTime startDate, DateTime endDate) async {
+    final entries = HiveDb.getEntriesForRange(startDate, endDate);
+    return entries.map((data) {
+      final date = DateTime.parse(data['date'] as String);
+      return WorkEntry(
+        date: date,
+        clockIn: data['in'] != null ? DateTime.parse(data['in'] as String) : null,
+        clockOut: data['out'] != null ? DateTime.parse(data['out'] as String) : null,
+        duration: data['duration'] as int? ?? 0,
+        isOffDay: data['offDay'] as bool? ?? false,
+        description: data['description'] as String?,
+      );
+    }).toList();
   }
 
-  Future<void> deleteWorkEntry(DateTime date) async {
-    final dateKey = date.toIso8601String();
-    await HiveDb.deleteEntry(dateKey);
+  Future<void> deleteWorkEntry(WorkEntry entry) async {
+    await HiveDb.deleteEntry(entry.date);
+  }
+
+  Future<void> deleteAllWorkEntries() async {
+    await HiveDb.deleteAllEntries();
   }
 
   // Settings Methods
@@ -180,7 +184,9 @@ class WorkHoursRepository {
     final hourlyRate = dailyRate / settings.dailyTargetHours;
     final overtimeRate = hourlyRate * settings.overtimeRate;
     final overtimePay = overtimeMinutes * overtimeRate / 60;
-    final totalEarnings = (actualMinutes * hourlyRate / 60) + overtimePay;
+    final workDaysEarnings = (actualMinutes * hourlyRate / 60) + overtimePay;
+    final offDaysEarnings = offDaysCount * dailyRate;
+    final totalEarnings = workDaysEarnings + offDaysEarnings;
     final earningsAfterInsurance = totalEarnings * (1 - settings.insuranceRate);
 
     // Calculate today's earnings and minutes
@@ -216,6 +222,8 @@ class WorkHoursRepository {
       'hourlyRate': hourlyRate,
       'overtimeRate': overtimeRate,
       'overtimePay': overtimePay,
+      'workDaysEarnings': workDaysEarnings,
+      'offDaysEarnings': offDaysEarnings,
       'totalEarnings': totalEarnings,
       'earningsAfterInsurance': earningsAfterInsurance,
       'todayMinutes': todayMinutes,

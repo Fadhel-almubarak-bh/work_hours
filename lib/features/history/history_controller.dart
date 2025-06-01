@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../data/local/hive_db.dart';
 import '../../data/repositories/work_hours_repository.dart';
 import '../../data/models/work_entry.dart';
+import 'package:intl/intl.dart';
 
 class SummaryData {
   final double totalHours;
@@ -30,17 +31,16 @@ class HistoryController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   SummaryData? get summary => _summary;
 
-  Future<void> loadHistory(DateTime month) async {
+  Future<void> loadHistory(DateTime date) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final startDate = DateTime(month.year, month.month, 1);
-      final endDate = DateTime(month.year, month.month + 1, 0);
-      _entries = await _repository.getWorkEntries(startDate, endDate);
+      final startDate = DateTime(date.year, date.month - 1, 1);
+      final endDate = DateTime(date.year, date.month + 1, 0);
+      _entries = await _repository.getWorkEntriesForRange(startDate, endDate);
     } catch (e) {
       debugPrint('Error loading history: $e');
-      _entries = [];
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -49,24 +49,104 @@ class HistoryController extends ChangeNotifier {
 
   Future<void> deleteEntry(WorkEntry entry) async {
     try {
-      await _repository.deleteWorkEntry(entry.date);
-      _entries.removeWhere((e) => e.date == entry.date);
+      await _repository.deleteWorkEntry(entry);
+      _entries.removeWhere((e) => e.date.isAtSameMomentAs(entry.date));
       notifyListeners();
     } catch (e) {
       debugPrint('Error deleting entry: $e');
+      rethrow;
     }
   }
 
-  Future<void> updateEntry(WorkEntry oldEntry, WorkEntry newEntry) async {
+  Future<void> deleteAllData() async {
     try {
-      await _repository.saveWorkEntry(newEntry);
-      final index = _entries.indexWhere((e) => e.date == oldEntry.date);
-      if (index != -1) {
-        _entries[index] = newEntry;
-        notifyListeners();
+      await _repository.deleteAllWorkEntries();
+      _entries.clear();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error deleting all data: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> addDummyData() async {
+    try {
+      final now = DateTime.now();
+      final currentMonth = DateTime(now.year, now.month, 1);
+      final lastMonth = DateTime(now.year, now.month - 1, 1);
+      
+      // Get work days and hours from settings
+      final workDays = HiveDb.getWorkDays();
+      final dailyTargetHours = HiveDb.getDailyTargetHours();
+      final dailyTargetMinutes = (dailyTargetHours * 60).round();
+
+      // Generate data for last month
+      await _generateMonthData(lastMonth, workDays, dailyTargetMinutes);
+      
+      // Generate data for current month (entire month)
+      final currentMonthEnd = DateTime(now.year, now.month + 1, 0);
+      await _generateMonthData(currentMonth, workDays, dailyTargetMinutes, endDate: currentMonthEnd);
+      
+      // Reload the history
+      await loadHistory(now);
+    } catch (e) {
+      debugPrint('Error adding dummy data: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> _generateMonthData(
+    DateTime monthStart,
+    List<bool> workDays,
+    int dailyTargetMinutes, {
+    DateTime? endDate,
+  }) async {
+    final monthEnd = endDate ?? DateTime(monthStart.year, monthStart.month + 1, 0);
+    
+    for (var day = monthStart; day.isBefore(monthEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+      // Skip if it's not a work day
+      if (!workDays[day.weekday - 1]) continue;
+
+      // Randomly decide if this is an off day (20% chance)
+      if (DateTime.now().millisecondsSinceEpoch % 5 == 0) {
+        // Create an off day entry
+        final entry = WorkEntry(
+          date: day,
+          duration: dailyTargetMinutes,
+          isOffDay: true,
+          description: _getRandomOffDayType(),
+        );
+        await _repository.saveWorkEntry(entry);
+      } else {
+        // Create a regular work day entry
+        final clockIn = DateTime(day.year, day.month, day.day, 9, 0);
+        final clockOut = DateTime(day.year, day.month, day.day, 17, 0);
+        
+        final entry = WorkEntry(
+          date: day,
+          clockIn: clockIn,
+          clockOut: clockOut,
+          duration: dailyTargetMinutes,
+          isOffDay: false,
+        );
+        await _repository.saveWorkEntry(entry);
       }
+    }
+  }
+
+  String _getRandomOffDayType() {
+    final types = ['Sick Leave', 'Public Holiday', 'Annual Leave'];
+    return types[DateTime.now().millisecondsSinceEpoch % types.length];
+  }
+
+  Future<void> updateEntry(WorkEntry entry) async {
+    try {
+      await _repository.saveWorkEntry(entry);
+      await loadHistory(entry.date);
+      notifyListeners();
     } catch (e) {
       debugPrint('Error updating entry: $e');
+      rethrow;
     }
   }
 

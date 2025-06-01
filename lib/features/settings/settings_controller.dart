@@ -10,6 +10,7 @@ import 'package:excel/excel.dart';
 
 class SettingsController extends ChangeNotifier {
   final WorkHoursRepository _repository;
+  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
   
   bool _isLoading = false;
   Settings? _settings;
@@ -107,13 +108,13 @@ class SettingsController extends ChangeNotifier {
     await saveSettings(newSettings);
   }
 
-  Future<void> updateThemeMode(ThemeMode? mode) async {
+  Future<void> updateThemeMode(ThemeMode? mode, BuildContext context) async {
     if (_settings == null || mode == null) return;
     final newSettings = _settings!.copyWith(themeMode: mode);
     await saveSettings(newSettings);
     
-    // Update the theme provider
-    final themeProvider = ThemeProvider();
+    // Update the theme provider using the existing instance
+    final themeProvider = ThemeProvider.of(context);
     themeProvider.setThemeMode(mode);
   }
 

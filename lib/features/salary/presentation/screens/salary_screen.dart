@@ -165,11 +165,24 @@ class _SalaryScreenState extends State<SalaryScreen> {
                       ),
                       const SizedBox(height: 8),
                       _buildSalaryInfoRow(
+                        'Off Days Earnings:',
+                        controller.formatCurrency((currentSalary['offDaysCount'] as int) * (currentSalary['dailyRate'] as double)),
+                        textColor: Colors.blue,
+                      ),
+                      const SizedBox(height: 8),
+                      _buildSalaryInfoRow(
+                        'Earnings from Work Days:',
+                        controller.formatCurrency(currentSalary['workDaysEarnings'] as double),
+                        primary: true,
+                        textColor: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(height: 8),
+                      _buildSalaryInfoRow(
                         'Total Earnings:',
                         controller.formatCurrency(currentSalary['totalEarnings'] as double),
                         primary: true,
-                        textColor: Theme.of(context).colorScheme.primary,
-                              ),
+                        textColor: Colors.green,
+                      ),
                       const SizedBox(height: 8),
                       _buildSalaryInfoRow(
                         'After Insurance (92%):',

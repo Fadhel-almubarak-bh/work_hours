@@ -91,8 +91,8 @@ class SummaryController extends ChangeNotifier {
 
   Future<void> deleteEntry(WorkEntry entry) async {
     try {
-      await _repository.deleteWorkEntry(entry.date);
-      _entries.removeWhere((e) => e.date == entry.date);
+      await _repository.deleteWorkEntry(entry);
+      _entries.removeWhere((e) => e.date.isAtSameMomentAs(entry.date));
       notifyListeners();
     } catch (e) {
       debugPrint('Error deleting entry: $e');
