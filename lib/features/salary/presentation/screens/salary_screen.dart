@@ -185,7 +185,7 @@ class _SalaryScreenState extends State<SalaryScreen> {
                       ),
                       const SizedBox(height: 8),
                       _buildSalaryInfoRow(
-                        'After Insurance (92%):',
+                        'After Insurance (${((1 - (currentSalary['insuranceRate'] as double? ?? 0.08)) * 100).round()}%):',
                         controller.formatCurrency(currentSalary['earningsAfterInsurance'] as double),
                         textColor: Colors.grey[600],
                       ),
@@ -196,16 +196,6 @@ class _SalaryScreenState extends State<SalaryScreen> {
                         'Hours Worked:',
                         controller.formatDuration(currentSalary['actualMinutes'] as int),
                       ),
-                      const SizedBox(height: 8),
-                      _buildSalaryInfoRow(
-                        'Hours Left to Do:',
-                                controller.formatDuration(
-                          (currentSalary['expectedMinutes'] as int) - (currentSalary['actualMinutes'] as int),
-                                ),
-                        textColor: ((currentSalary['expectedMinutes'] as int) - (currentSalary['actualMinutes'] as int)) < 0 
-                            ? Colors.green 
-                            : Colors.orange,
-                              ),
                           ],
                         ),
                       ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 
 class SettingsCard extends StatelessWidget {
   final String title;
@@ -34,7 +35,7 @@ class SettingsCard extends StatelessWidget {
   }
 }
 
-class CurrencyTextField extends StatelessWidget {
+class CurrencyTextField extends StatefulWidget {
   final String label;
   final double value;
   final Function(double) onChanged;
@@ -49,32 +50,72 @@ class CurrencyTextField extends StatelessWidget {
   });
 
   @override
+  State<CurrencyTextField> createState() => _CurrencyTextFieldState();
+}
+
+class _CurrencyTextFieldState extends State<CurrencyTextField> {
+  late TextEditingController _controller;
+  Timer? _debounceTimer;
+
+  String _formatNumber(double number) {
+    // Remove trailing .0 if it's a whole number
+    return number == number.roundToDouble() 
+        ? number.round().toString() 
+        : number.toString();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _formatNumber(widget.value));
+  }
+
+  @override
+  void didUpdateWidget(CurrencyTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value && !_controller.text.contains('.')) {
+      _controller.text = _formatNumber(widget.value);
+    }
+  }
+
+  void _handleValueChange(String value) {
+    final number = double.tryParse(value);
+    if (number != null) {
+      // Debounce the update to avoid too many saves
+      _debounceTimer?.cancel();
+      _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+        widget.onChanged(number);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return TextField(
       decoration: InputDecoration(
-        labelText: label,
-        errorText: errorText,
+        labelText: widget.label,
+        errorText: widget.errorText,
         prefixText: '\$ ',
         border: const OutlineInputBorder(),
       ),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [
-        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
       ],
-      controller: TextEditingController(
-        text: value.toStringAsFixed(2),
-      ),
-      onChanged: (value) {
-        final number = double.tryParse(value);
-        if (number != null) {
-          onChanged(number);
-        }
-      },
+      controller: _controller,
+      onChanged: _handleValueChange,
     );
   }
 }
 
-class HoursTextField extends StatelessWidget {
+class HoursTextField extends StatefulWidget {
   final String label;
   final int value;
   final Function(int) onChanged;
@@ -89,26 +130,59 @@ class HoursTextField extends StatelessWidget {
   });
 
   @override
+  State<HoursTextField> createState() => _HoursTextFieldState();
+}
+
+class _HoursTextFieldState extends State<HoursTextField> {
+  late TextEditingController _controller;
+  Timer? _debounceTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value.toString());
+  }
+
+  @override
+  void didUpdateWidget(HoursTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) {
+      _controller.text = widget.value.toString();
+    }
+  }
+
+  void _handleValueChange(String value) {
+    final number = int.tryParse(value);
+    if (number != null) {
+      // Debounce the update to avoid too many saves
+      _debounceTimer?.cancel();
+      _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+        widget.onChanged(number);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return TextField(
       decoration: InputDecoration(
-        labelText: label,
-        errorText: errorText,
+        labelText: widget.label,
+        errorText: widget.errorText,
         border: const OutlineInputBorder(),
       ),
       keyboardType: TextInputType.number,
       inputFormatters: [
         FilteringTextInputFormatter.digitsOnly,
       ],
-      controller: TextEditingController(
-        text: value.toString(),
-      ),
-      onChanged: (value) {
-        final number = int.tryParse(value);
-        if (number != null) {
-          onChanged(number);
-        }
-      },
+      controller: _controller,
+      onChanged: _handleValueChange,
     );
   }
 }
@@ -143,7 +217,7 @@ class WorkDaysSelector extends StatelessWidget {
   }
 }
 
-class PercentageSlider extends StatelessWidget {
+class PercentageSlider extends StatefulWidget {
   final String label;
   final double value;
   final ValueChanged<double> onChanged;
@@ -158,17 +232,57 @@ class PercentageSlider extends StatelessWidget {
   });
 
   @override
+  State<PercentageSlider> createState() => _PercentageSliderState();
+}
+
+class _PercentageSliderState extends State<PercentageSlider> {
+  late double _currentValue;
+  Timer? _debounceTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentValue = widget.value;
+  }
+
+  @override
+  void didUpdateWidget(PercentageSlider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) {
+      _currentValue = widget.value;
+    }
+  }
+
+  void _handleValueChange(double value) {
+    setState(() {
+      _currentValue = value;
+    });
+
+    // Debounce the update to avoid too many saves
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      widget.onChanged(value);
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     // For overtime, we need to handle values > 1.0
-    final displayValue = isOvertime ? value : value.clamp(0.0, 1.0);
-    final maxValue = isOvertime ? 2.0 : 1.0;
-    final divisions = isOvertime ? 200 : 100;
+    final displayValue = widget.isOvertime ? _currentValue : _currentValue.clamp(0.0, 1.0);
+    final maxValue = widget.isOvertime ? 3.0 : 1.0; // Increased max for overtime
+    final divisions = widget.isOvertime ? 300 : 100; // More divisions for finer control
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
+          widget.label,
           style: Theme.of(context).textTheme.titleMedium,
         ),
         Row(
@@ -180,11 +294,11 @@ class PercentageSlider extends StatelessWidget {
                 max: maxValue,
                 divisions: divisions,
                 label: '${(displayValue * 100).round()}%',
-                onChanged: onChanged,
+                onChanged: _handleValueChange,
               ),
             ),
             SizedBox(
-              width: 60,
+              width: 80,
               child: Text(
                 '${(displayValue * 100).round()}%',
                 style: Theme.of(context).textTheme.bodyLarge,
@@ -198,7 +312,7 @@ class PercentageSlider extends StatelessWidget {
   }
 }
 
-class CurrencySelector extends StatelessWidget {
+class CurrencySelector extends StatefulWidget {
   final String value;
   final Function(String) onChanged;
 
@@ -209,11 +323,32 @@ class CurrencySelector extends StatelessWidget {
   });
 
   @override
+  State<CurrencySelector> createState() => _CurrencySelectorState();
+}
+
+class _CurrencySelectorState extends State<CurrencySelector> {
+  late String _selectedCurrency;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCurrency = widget.value;
+  }
+
+  @override
+  void didUpdateWidget(CurrencySelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) {
+      _selectedCurrency = widget.value;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final currencies = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD'];
     
     return DropdownButtonFormField<String>(
-      value: value,
+      value: _selectedCurrency,
       decoration: const InputDecoration(
         labelText: 'Currency',
         border: OutlineInputBorder(),
@@ -226,7 +361,10 @@ class CurrencySelector extends StatelessWidget {
       }).toList(),
       onChanged: (value) {
         if (value != null) {
-          onChanged(value);
+          setState(() {
+            _selectedCurrency = value;
+          });
+          widget.onChanged(value);
         }
       },
     );

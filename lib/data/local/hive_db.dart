@@ -82,7 +82,7 @@ class HiveDb {
 
   static int getDailyTargetMinutes() {
     final settings = getSettings();
-    return (settings['dailyTargetHours'] as num?)?.toInt() ?? 8 * 60;
+    return ((settings['dailyTargetHours'] as num?)?.toInt() ?? 8) * 60;
   }
 
   static int getWeeklyTargetMinutes() {
@@ -525,6 +525,79 @@ class HiveDb {
     } catch (e) {
       debugPrint('Error in getWorkDays: $e');
       return [true, true, true, true, true, false, false];
+    }
+  }
+
+  static Future<void> setCurrency(String currency) async {
+    try {
+      await _settingsBoxInstance.put('currency', currency);
+    } catch (e) {
+      debugPrint('Error in setCurrency: $e');
+      rethrow;
+    }
+  }
+
+  static String getCurrency() {
+    try {
+      return _settingsBoxInstance.get('currency', defaultValue: 'USD');
+    } catch (e) {
+      debugPrint('Error in getCurrency: $e');
+      return 'USD';
+    }
+  }
+
+  static Future<void> setInsuranceRate(double rate) async {
+    try {
+      await _settingsBoxInstance.put('insuranceRate', rate);
+    } catch (e) {
+      debugPrint('Error in setInsuranceRate: $e');
+      rethrow;
+    }
+  }
+
+  static double getInsuranceRate() {
+    try {
+      return _settingsBoxInstance.get('insuranceRate', defaultValue: 0.08);
+    } catch (e) {
+      debugPrint('Error in getInsuranceRate: $e');
+      return 0.08;
+    }
+  }
+
+  static Future<void> setOvertimeRate(double rate) async {
+    try {
+      await _settingsBoxInstance.put('overtimeRate', rate);
+    } catch (e) {
+      debugPrint('Error in setOvertimeRate: $e');
+      rethrow;
+    }
+  }
+
+  static double getOvertimeRate() {
+    try {
+      return _settingsBoxInstance.get('overtimeRate', defaultValue: 1.5);
+    } catch (e) {
+      debugPrint('Error in getOvertimeRate: $e');
+      return 1.5;
+    }
+  }
+
+  static Future<void> setThemeMode(ThemeMode mode) async {
+    try {
+      await _settingsBoxInstance.put('themeMode', mode.index);
+    } catch (e) {
+      debugPrint('Error in setThemeMode: $e');
+      rethrow;
+    }
+  }
+
+  static ThemeMode getThemeMode() {
+    try {
+      final index = _settingsBoxInstance.get('themeMode', defaultValue: ThemeMode.system.index);
+      return ThemeMode.values[index];
+    } catch (e) {
+      debugPrint('Error in getThemeMode: $e');
+      return ThemeMode.system;
     }
   }
 

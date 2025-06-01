@@ -84,6 +84,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
       final monthStats = HiveDb.getStatsForRange(monthStart, now.subtract(const Duration(days: 1)));
       final lastMonthStats = HiveDb.getStatsForRange(lastMonthStart, lastMonthEnd);
 
+      // Calculate monthly total including today if checked out
       int monthlyTotal = (monthStats['totalMinutes'] as num).toInt();
       if (!isCurrentlyClockedIn && todayEntry != null && todayEntry['out'] != null) {
         if (todayEntry['offDay'] == true) {
@@ -93,10 +94,37 @@ class _SummaryScreenState extends State<SummaryScreen> {
         }
       }
 
-      final overtimeMinutes = HiveDb.getMonthlyOvertime();
-      final lastMonthOvertimeMinutes = HiveDb.getLastMonthOvertime();
-      final currentMonthExpectedMinutes = HiveDb.getCurrentMonthExpectedMinutes();
-      final lastMonthExpectedMinutes = HiveDb.getLastMonthExpectedMinutes();
+      // Get work days configuration
+      final workDays = HiveDb.getWorkDays();
+      final dailyTargetHours = HiveDb.getDailyTargetHours();
+
+      // Calculate expected work days for current month
+      int expectedWorkDays = 0;
+      for (var day = monthStart; day.isBefore(now.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+        if (workDays[day.weekday - 1]) {
+          expectedWorkDays++;
+        }
+      }
+
+      // Calculate expected minutes for current month
+      final currentMonthExpectedMinutes = expectedWorkDays * dailyTargetHours * 60;
+
+      // Calculate overtime
+      final overtimeMinutes = monthlyTotal - currentMonthExpectedMinutes;
+
+      // Calculate expected work days for last month
+      int lastMonthExpectedWorkDays = 0;
+      for (var day = lastMonthStart; day.isBefore(lastMonthEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+        if (workDays[day.weekday - 1]) {
+          lastMonthExpectedWorkDays++;
+        }
+      }
+
+      // Calculate expected minutes for last month
+      final lastMonthExpectedMinutes = lastMonthExpectedWorkDays * dailyTargetHours * 60;
+
+      // Calculate last month overtime
+      final lastMonthOvertimeMinutes = (lastMonthStats['totalMinutes'] as num).toInt() - lastMonthExpectedMinutes;
 
       final weeklyTotal = (weekStats['totalMinutes'] as num).toInt() + (isCurrentlyClockedIn ? 0 : todayMinutes);
 
@@ -193,7 +221,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                           const SizedBox(height: 24),
                           _buildOvertimeGaugeCard(summary),
                           const SizedBox(height: 24),
-                          _buildMonthlyTrendChart(summary),
+                          _buildMonthlyProgress(summary),
                           const SizedBox(height: 24),
                           _buildWeeklyBarChart(),
                           const SizedBox(height: 24),
@@ -574,64 +602,52 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Widget _buildOvertimeGaugeCard(Map<String, dynamic> summary) {
-    final currentMonthOvertimeMinutes = HiveDb.getMonthlyOvertime();
-    final dailyTarget = HiveDb.getDailyTargetMinutes();
+    final overtimeMinutes = summary['overtimeMinutes'] ?? 0;
+    final monthlyTotal = summary['monthlyTotal'] ?? 0;
+    final currentMonthExpectedMinutes = summary['currentMonthExpectedMinutes'] ?? 0;
+    final monthlyWorkDays = summary['monthlyWorkDays'] ?? 0;
+    final monthlyOffDays = summary['monthlyOffDays'] ?? 0;
 
-    final overtimeHours = currentMonthOvertimeMinutes / 60.0;
-    final maxGaugeValue = dailyTarget / 30.0;
-
+    // Calculate overtime in hours for the gauge
+    final overtimeHours = overtimeMinutes / 60.0;
+    // Set max gauge value to 20 hours (adjust as needed)
+    final maxGaugeValue = 20.0;
     double gaugeValue = overtimeHours.abs().clamp(0.0, maxGaugeValue);
     double percentage = (gaugeValue / maxGaugeValue) * 100;
 
-    final isAhead = currentMonthOvertimeMinutes >= 0;
-    final displayValue = formatDuration(currentMonthOvertimeMinutes.abs());
+    final isAhead = overtimeMinutes >= 0;
+    final displayValue = formatDuration(overtimeMinutes.abs());
     final statusText = isAhead ? 'ahead of schedule' : 'behind schedule';
     final gaugeColor = isAhead ? Colors.green : Colors.red;
 
+    // Calculate work statistics
+    final workDays = HiveDb.getWorkDays();
     final now = DateTime.now();
-    final firstOfMonth = DateTime(now.year, now.month, 1);
+    final monthStart = DateTime(now.year, now.month, 1);
     final today = DateTime(now.year, now.month, now.day);
-    final allEntries = HiveDb.getAllEntries();
-    final workDaysSetting = HiveDb.getWorkDays();
 
-    int regularWorkDays = 0;
+    int configuredWorkDays = 0;
+    int workedDays = 0;
     int offDays = 0;
-    int extraWorkDays = 0;
-    int configuredWorkDaysThisMonth = 0;
-    int missedWorkDays = 0;
-    int totalWorkedMinutes = 0;
-    int totalExpectedMinutes = 0;
+    int missedDays = 0;
 
-    for (var day = firstOfMonth;
-        day.isBefore(today.add(const Duration(days: 1)));
-        day = day.add(const Duration(days: 1))) {
-      final dateKey = DateFormat('yyyy-MM-dd').format(day);
-      final entry = allEntries[dateKey];
+    for (var day = monthStart; day.isBefore(today.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
       final weekdayIndex = day.weekday - 1;
-      final bool isWorkDay = workDaysSetting[weekdayIndex];
+      final bool isWorkDay = workDays[weekdayIndex];
+      final entry = HiveDb.getDayEntry(day);
 
       if (isWorkDay) {
-        configuredWorkDaysThisMonth++;
-        totalExpectedMinutes += dailyTarget;
-
-        if (entry == null) {
-          missedWorkDays++;
-        }
-      }
-
-      if (entry != null) {
-        if (entry['offDay'] == true) {
-          offDays++;
-          totalWorkedMinutes += dailyTarget;
-        } else if (entry['duration'] != null) {
-          final duration = (entry['duration'] as num).toInt();
-          totalWorkedMinutes += duration;
-
-          if (isWorkDay) {
-            regularWorkDays++;
+        configuredWorkDays++;
+        if (entry != null) {
+          if (entry['offDay'] == true) {
+            offDays++;
+          } else if (entry['duration'] != null || entry['in'] != null) {
+            workedDays++;
           } else {
-            extraWorkDays++;
+            missedDays++;
           }
+        } else {
+          missedDays++;
         }
       }
     }
@@ -639,15 +655,37 @@ class _SummaryScreenState extends State<SummaryScreen> {
     return Card(
       elevation: 4,
       child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-              'Overtime Tracker',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 16),
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Overtime Tracker',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isAhead ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isAhead ? Colors.green.withOpacity(0.3) : Colors.red.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      color: isAhead ? Colors.green : Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
             SizedBox(
               height: 220,
               child: SfRadialGauge(
@@ -719,10 +757,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
                               ),
                             ),
                             Text(
-                              statusText,
+                              '${(monthlyTotal / 60).toStringAsFixed(1)}h / ${(currentMonthExpectedMinutes / 60).toStringAsFixed(1)}h',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: gaugeColor,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -744,36 +782,66 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Regular Days: $regularWorkDays', style: const TextStyle(fontSize: 13)),
-                    Text('Off Days: $offDays', style: const TextStyle(fontSize: 13)),
-                    Text('Extra Days: $extraWorkDays', style: const TextStyle(fontSize: 13)),
                     Text(
-                      'Expected Hours: ${configuredWorkDaysThisMonth * dailyTarget ~/ 60}h',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                      'Work Days',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
+                    const SizedBox(height: 4),
                     Text(
-                      '($configuredWorkDaysThisMonth days × ${dailyTarget ~/ 60}h)',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      '$workedDays / $configuredWorkDays',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ],
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('Required Days: $configuredWorkDaysThisMonth', style: const TextStyle(fontSize: 13)),
-                    Text('Missed Days: $missedWorkDays', style: const TextStyle(fontSize: 13, color: Colors.red)),
-                    Text('Daily Target: ${formatDuration(dailyTarget)}', style: const TextStyle(fontSize: 13)),
+                    Text(
+                      'Off Days',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$offDays',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ],
                 ),
               ],
             ),
-            if (missedWorkDays > 0) ...[
-              const SizedBox(height: 8),
-              Text(
-                'You have $missedWorkDays missed work ${missedWorkDays == 1 ? 'day' : 'days'} this month',
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.red,
+            if (missedDays > 0) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.red.withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.red,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'You have $missedDays missed work ${missedDays == 1 ? 'day' : 'days'} this month',
+                        style: const TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -782,521 +850,142 @@ class _SummaryScreenState extends State<SummaryScreen> {
       ),
     );
   }
-  
-  Widget _buildMonthlyTrendChart(Map<String, dynamic> summary) {
-    final currentMonthName = DateFormat('MMMM yyyy').format(DateTime(DateTime.now().year, DateTime.now().month, 1));
-    final currentMonthExpectedMinutes = (summary['currentMonthExpectedMinutes'] as num?)?.toInt() ?? 0;
-    final monthlyTotal = (summary['monthlyTotal'] as num?)?.toInt() ?? 0;
-    final overtimeMinutes = (summary['overtimeMinutes'] as num?)?.toInt() ?? 0;
-    final monthlyWorkDays = (summary['monthlyWorkDays'] as num?)?.toInt() ?? 0;
-    final monthlyOffDays = (summary['monthlyOffDays'] as num?)?.toInt() ?? 0;
 
-    final completionPercentage = currentMonthExpectedMinutes > 0
-        ? ((monthlyTotal / currentMonthExpectedMinutes) * 100).clamp(0, 100)
+  Widget _buildMonthlyProgress(Map<String, dynamic> summary) {
+    final monthlyTotal = summary['monthlyTotal'] ?? 0;
+    final currentMonthExpectedMinutes = summary['currentMonthExpectedMinutes'] ?? 0;
+    final overtimeMinutes = summary['overtimeMinutes'] ?? 0;
+    final monthlyWorkDays = summary['monthlyWorkDays'] ?? 0;
+    final monthlyOffDays = summary['monthlyOffDays'] ?? 0;
+
+    final progress = currentMonthExpectedMinutes > 0
+        ? (monthlyTotal / currentMonthExpectedMinutes).clamp(0.0, 1.0)
         : 0.0;
 
-    return FutureBuilder<List<WorkHoursData>>(
-      future: _getMonthlyTrendData(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final data = snapshot.data ?? [];
-        final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-        final textColor = isDarkMode ? Colors.white : Colors.black;
-        final subTextColor = isDarkMode ? Colors.white70 : Colors.grey;
-        final containerColor = isDarkMode ? Colors.grey[800] : Colors.white;
-        final gridBackgroundColor = isDarkMode ? Colors.grey[850] : Colors.grey.withOpacity(0.1);
-    
     return Card(
-          elevation: 4,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Monthly Progress',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'For $currentMonthName',
-                          style: TextStyle(fontSize: 14, color: subTextColor),
-                        ),
-                      ],
-                    ),
-                Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                        color: completionPercentage >= 100
-                            ? Colors.green.withOpacity(isDarkMode ? 0.4 : 0.2)
-                            : Colors.amber.withOpacity(isDarkMode ? 0.4 : 0.2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${completionPercentage.toStringAsFixed(1)}% Complete',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: completionPercentage >= 100
-                              ? (isDarkMode ? Colors.green[200] : Colors.green)
-                              : (isDarkMode ? Colors.amber[200] : Colors.amber[800]),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: gridBackgroundColor,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: containerColor,
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 2,
-                                    offset: const Offset(0, 1),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
                 Text(
-                                    'Expected Hours',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                                      color: subTextColor,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    formatDuration(currentMonthExpectedMinutes),
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: textColor,
+                  'Monthly Progress',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                Text(
+                  '${(progress * 100).toStringAsFixed(1)}%',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: progress >= 1.0 ? Colors.green : Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ],
             ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: containerColor,
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 2,
-                                    offset: const Offset(0, 1),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Actual Hours',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: subTextColor,
-                                    ),
-                                  ),
-              const SizedBox(height: 4),
-                                  Text(
-                                    formatDuration(monthlyTotal),
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: overtimeMinutes >= 0
-                                          ? (isDarkMode ? Colors.green[200] : Colors.green)
-                                          : (isDarkMode ? Colors.red[200] : Colors.red),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
+            const SizedBox(height: 16),
+            LinearProgressIndicator(
+              value: progress,
+              backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+              minHeight: 8,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Hours Worked',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: containerColor,
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 2,
-                                    offset: const Offset(0, 1),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Work Days',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: subTextColor,
-                                    ),
-                                  ),
-              const SizedBox(height: 4),
-                                  Text(
-                                    '$monthlyWorkDays',
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: isDarkMode ? AppColors.secondaryLight : AppColors.secondaryLight,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: containerColor,
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 2,
-                                    offset: const Offset(0, 1),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Off Days',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: subTextColor,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '$monthlyOffDays',
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: isDarkMode ? Colors.lightBlue[200] : Colors.blue,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: overtimeMinutes >= 0
-                              ? (isDarkMode ? Colors.green.withOpacity(0.3) : Colors.green.withOpacity(0.1))
-                              : (isDarkMode ? Colors.red.withOpacity(0.3) : Colors.red.withOpacity(0.1)),
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 2,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              'Overtime',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: overtimeMinutes >= 0
-                                    ? (isDarkMode ? Colors.green[200] : Colors.green[700])
-                                    : (isDarkMode ? Colors.red[200] : Colors.red[700]),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${overtimeMinutes >= 0 ? '+' : ''}${formatDuration(overtimeMinutes.abs())}',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: overtimeMinutes >= 0
-                                    ? (isDarkMode ? Colors.green[200] : Colors.green[700])
-                                    : (isDarkMode ? Colors.red[200] : Colors.red[700]),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              overtimeMinutes >= 0 ? 'You are ahead of schedule' : 'You are behind schedule',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: overtimeMinutes >= 0
-                                    ? (isDarkMode ? Colors.green[200] : Colors.green[700])
-                                    : (isDarkMode ? Colors.red[200] : Colors.red[700]),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${(monthlyTotal ~/ 60)}h ${(monthlyTotal % 60)}m',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 20),
-                Text(
-                  'Daily Work Hours Trend',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Target',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${(currentMonthExpectedMinutes ~/ 60)}h ${(currentMonthExpectedMinutes % 60)}m',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 250,
-                  child: SfCartesianChart(
-                    plotAreaBorderWidth: 0,
-                    margin: const EdgeInsets.all(10),
-                    primaryXAxis: DateTimeAxis(
-                      intervalType: DateTimeIntervalType.days,
-                      dateFormat: DateFormat.d(),
-                      majorGridLines: const MajorGridLines(width: 0),
-                      title: AxisTitle(
-                        text: 'Day of Month',
-                        textStyle: TextStyle(fontSize: 12, color: subTextColor),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Overtime',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                      labelStyle: TextStyle(color: subTextColor),
                     ),
-                    primaryYAxis: NumericAxis(
-                      axisLine: const AxisLine(width: 0),
-                      labelFormat: '{value}h',
-                      majorTickLines: const MajorTickLines(size: 0),
-                      title: AxisTitle(
-                        text: 'Hours',
-                        textStyle: TextStyle(fontSize: 12, color: subTextColor),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${overtimeMinutes >= 0 ? '+' : ''}${(overtimeMinutes ~/ 60)}h ${(overtimeMinutes.abs() % 60)}m',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: overtimeMinutes >= 0 ? Colors.green : Colors.orange,
                       ),
-                      labelStyle: TextStyle(color: subTextColor),
                     ),
-                    legend: Legend(
-                      isVisible: true,
-                      position: LegendPosition.bottom,
-                      overflowMode: LegendItemOverflowMode.wrap,
-                      textStyle: TextStyle(color: subTextColor),
-                    ),
-                    tooltipBehavior: TooltipBehavior(
-                      enable: true,
-                      format: 'point.x : point.y hours',
-                      duration: 3000,
-                      color: isDarkMode ? Colors.grey[800] : Colors.white,
-                      textStyle: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
-                    ),
-                    crosshairBehavior: CrosshairBehavior(
-                      enable: true,
-                      lineColor: isDarkMode ? Colors.grey[400] : Colors.grey,
-                      lineDashArray: const <double>[5, 5],
-                    ),
-                    zoomPanBehavior: ZoomPanBehavior(
-                      enablePinching: true,
-                      enableDoubleTapZooming: true,
-                      enablePanning: true,
-                    ),
-                    series: <CartesianSeries>[
-                      LineSeries<WorkHoursData, DateTime>(
-                        name: 'Daily Hours',
-                        dataSource: data,
-                        xValueMapper: (WorkHoursData data, _) => data.date,
-                        yValueMapper: (WorkHoursData data, _) => data.hours,
-                        color: isDarkMode ? AppColors.secondaryLight.withOpacity(0.9) : AppColors.secondaryLight,
-                        width: 3,
-                        markerSettings: const MarkerSettings(
-                          isVisible: true,
-                          height: 6,
-                          width: 6,
-                          shape: DataMarkerType.circle,
-                        ),
-                        animationDuration: 1500,
-                        enableTooltip: true,
-                      ),
-                      LineSeries<WorkHoursData, DateTime>(
-                        name: 'Target',
-                        dataSource: data,
-                        xValueMapper: (WorkHoursData data, _) => data.date,
-                        yValueMapper: (WorkHoursData data, _) => data.target,
-                        color: isDarkMode ? Colors.grey[400] : Colors.grey.withOpacity(0.7),
-                        width: 2,
-                        dashArray: const <double>[5, 5],
-                      ),
-                      AreaSeries<WorkHoursData, DateTime>(
-                        name: 'Cumulative',
-                        dataSource: data,
-                        xValueMapper: (WorkHoursData data, _) => data.date,
-                        yValueMapper: (WorkHoursData data, _) => data.cumulative,
-                        color: isDarkMode ? AppColors.secondaryLight.withOpacity(0.4) : AppColors.secondaryLight.withOpacity(0.2),
-                        borderColor: isDarkMode ? AppColors.secondaryLight.withOpacity(0.7) : AppColors.secondaryLight.withOpacity(0.5),
-                        borderWidth: 2,
-                        animationDuration: 2000,
-                      ),
-                    ],
-                    annotations: <CartesianChartAnnotation>[
-                      CartesianChartAnnotation(
-                        widget: Container(
-                          padding: const EdgeInsets.all(5),
-                          decoration: BoxDecoration(
-                            color: isDarkMode ? Colors.amber.withOpacity(0.9) : Colors.amber.withOpacity(0.8),
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                          child: const Text(
-                            'Today',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        coordinateUnit: CoordinateUnit.point,
-                        x: DateTime.now(),
-                        y: 0,
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: isDarkMode ? Colors.grey[800]!.withOpacity(0.5) : Colors.grey.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.info_outline, size: 16, color: subTextColor),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Chart Guide',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: textColor,
-                            ),
-                          ),
-                        ],
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Work Days',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '• Blue line: Daily hours worked each day',
-                        style: TextStyle(fontSize: 12, color: subTextColor),
-                      ),
-                      Text(
-                        '• Grey line: Daily target hours',
-                        style: TextStyle(fontSize: 12, color: subTextColor),
-                      ),
-                      Text(
-                        '• Blue area: Cumulative hours worked in the month',
-                        style: TextStyle(fontSize: 12, color: subTextColor),
-                      ),
-                      Text(
-                        '• Zoom: Pinch or double tap to zoom in on specific days',
-                        style: TextStyle(fontSize: 12, color: subTextColor),
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$monthlyWorkDays days',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ],
                 ),
+              ],
+            ),
+            if (monthlyOffDays > 0) ...[
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    'Off Days: $monthlyOffDays',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
-        );
-      },
     );
-  }
-
-  Future<List<WorkHoursData>> _getMonthlyTrendData() async {
-    final now = DateTime.now();
-    final firstOfMonth = DateTime(now.year, now.month, 1);
-    final List<WorkHoursData> result = [];
-
-    final allEntries = HiveDb.getAllEntries();
-    final dailyTarget = HiveDb.getDailyTargetMinutes() / 60.0;
-    double cumulativeHours = 0;
-
-    for (var day = firstOfMonth;
-        day.isBefore(now.add(const Duration(days: 1)));
-        day = day.add(const Duration(days: 1))) {
-      final dateKey = DateFormat('yyyy-MM-dd').format(day);
-      final entry = allEntries[dateKey];
-
-      double hoursWorked = 0;
-
-      if (entry != null) {
-        if (entry['offDay'] == true) {
-          hoursWorked = dailyTarget;
-        } else if (entry['duration'] != null) {
-          hoursWorked = (entry['duration'] as num).toInt() / 60.0;
-        } else if (entry['in'] != null && entry['out'] == null && day.day == now.day) {
-          final clockInTime = DateTime.parse(entry['in']);
-          final currentDuration = now.difference(clockInTime).inMinutes;
-          hoursWorked = currentDuration / 60.0;
-        }
-      }
-
-      cumulativeHours += hoursWorked;
-
-      result.add(WorkHoursData(
-        date: day,
-        hours: hoursWorked,
-        target: dailyTarget,
-        cumulative: cumulativeHours,
-      ));
-    }
-
-    return result;
   }
 
   Widget _buildWeeklyBarChart() {
@@ -1312,6 +1001,15 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
         final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
         final dailyTarget = HiveDb.getDailyTargetMinutes() / 60;
+
+        // Find the maximum hours worked in a day to set appropriate Y-axis scale
+        double maxHours = dailyTarget;
+        for (int i = 0; i < 7; i++) {
+          final double hours = (data[i.toString()] ?? 0.0) / 60.0;
+          if (hours > maxHours) maxHours = hours;
+        }
+        // Set max Y to either 150% of daily target or 150% of max hours, whichever is greater
+        final maxY = (maxHours > dailyTarget ? maxHours : dailyTarget) * 1.5;
 
         for (int i = 0; i < 7; i++) {
           final double hours = (data[i.toString()] ?? 0.0) / 60.0;
@@ -1339,13 +1037,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
             padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
+              children: [
+                Text(
                   'Weekly Work Hours',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
-        Text(
+                Text(
                   'Hours worked each day this week',
                   style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
@@ -1355,44 +1053,62 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   child: BarChart(
                     BarChartData(
                       alignment: BarChartAlignment.spaceAround,
-                      maxY: dailyTarget * 1.5,
+                      maxY: maxY,
                       barGroups: barGroups,
                       titlesData: FlTitlesData(
-                        leftTitles: const AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 30,
-                          ),
-                        ),
+                        show: true,
                         bottomTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
                             getTitlesWidget: (value, meta) {
-                              if (value < 0 || value >= weekdays.length) {
-                                return const SizedBox();
-                              }
                               return Padding(
                                 padding: const EdgeInsets.only(top: 8.0),
                                 child: Text(
                                   weekdays[value.toInt()],
-          style: const TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 12,
-            fontWeight: FontWeight.bold,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               );
                             },
                           ),
                         ),
-                        rightTitles: const AxisTitles(
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 40,
+                            getTitlesWidget: (value, meta) {
+                              return Text(
+                                '${value.toStringAsFixed(1)}h',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        topTitles: AxisTitles(
                           sideTitles: SideTitles(showTitles: false),
                         ),
-                        topTitles: const AxisTitles(
+                        rightTitles: AxisTitles(
                           sideTitles: SideTitles(showTitles: false),
                         ),
                       ),
-                      gridData: const FlGridData(show: false),
                       borderData: FlBorderData(show: false),
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        horizontalInterval: dailyTarget,
+                        getDrawingHorizontalLine: (value) {
+                          return FlLine(
+                            color: Colors.grey.withOpacity(0.2),
+                            strokeWidth: 1,
+                            dashArray: [5, 5],
+                          );
+                        },
+                      ),
                     ),
                     swapAnimationDuration: const Duration(milliseconds: 500),
                   ),
@@ -1482,7 +1198,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+          children: [
             Text(
               'Last Month Summary',
               style: Theme.of(context).textTheme.titleLarge,
@@ -1558,10 +1274,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
               ),
             ),
             const SizedBox(height: 12),
-        Container(
+            Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          decoration: BoxDecoration(
+              decoration: BoxDecoration(
                 color: lastMonthOvertimeMinutes >= 0
                     ? Colors.green.withOpacity(0.1)
                     : Colors.red.withOpacity(0.1),

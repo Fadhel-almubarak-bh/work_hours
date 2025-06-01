@@ -82,6 +82,10 @@ class WorkHoursRepository {
     await HiveDb.setDailyTargetHours(settings.dailyTargetHours);
     await HiveDb.setMonthlySalary(settings.monthlySalary);
     await HiveDb.setWorkDays(settings.workDays);
+    await HiveDb.setCurrency(settings.currency);
+    await HiveDb.setInsuranceRate(settings.insuranceRate);
+    await HiveDb.setOvertimeRate(settings.overtimeRate);
+    await HiveDb.setThemeMode(settings.themeMode);
   }
 
   Future<Settings?> getSettings() async {
@@ -89,8 +93,10 @@ class WorkHoursRepository {
       dailyTargetHours: HiveDb.getDailyTargetHours(),
       monthlySalary: HiveDb.getMonthlySalary(),
       workDays: HiveDb.getWorkDays(),
-      overtimeRate: 1.5, // Default value
-      insuranceRate: 0.0, // Default value
+      currency: HiveDb.getCurrency(),
+      insuranceRate: HiveDb.getInsuranceRate(),
+      overtimeRate: HiveDb.getOvertimeRate(),
+      themeMode: HiveDb.getThemeMode(),
     );
   }
 
@@ -234,6 +240,7 @@ class WorkHoursRepository {
       'dailyHours': settings.dailyTargetHours,
       'nonWorkingDaysCount': DateTimeUtils.getNonWorkingDaysInMonth(month, settings.workDays),
       'totalDaysOff': offDaysCount + DateTimeUtils.getNonWorkingDaysInMonth(month, settings.workDays),
+      'insuranceRate': settings.insuranceRate,
     };
   }
 

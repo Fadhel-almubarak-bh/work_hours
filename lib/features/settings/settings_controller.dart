@@ -56,19 +56,13 @@ class SettingsController extends ChangeNotifier {
   }
 
   Future<void> saveSettings(Settings newSettings) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
     try {
       await _repository.saveSettings(newSettings);
       _settings = newSettings;
+      notifyListeners();
     } catch (e) {
       _error = 'Failed to save settings: $e';
       debugPrint(_error);
-    } finally {
-      _isLoading = false;
-      notifyListeners();
     }
   }
 
@@ -92,20 +86,39 @@ class SettingsController extends ChangeNotifier {
 
   Future<void> updateCurrency(String currency) async {
     if (_settings == null) return;
-    final newSettings = _settings!.copyWith(currency: currency);
-    await saveSettings(newSettings);
+    try {
+      final newSettings = _settings!.copyWith(currency: currency);
+      await saveSettings(newSettings);
+    } catch (e) {
+      _error = 'Failed to update currency: $e';
+      debugPrint(_error);
+    }
   }
 
   Future<void> updateInsuranceRate(double rate) async {
     if (_settings == null) return;
-    final newSettings = _settings!.copyWith(insuranceRate: rate);
-    await saveSettings(newSettings);
+    try {
+      // Ensure rate is between 0 and 1
+      final clampedRate = rate.clamp(0.0, 1.0);
+      final newSettings = _settings!.copyWith(insuranceRate: clampedRate);
+      await saveSettings(newSettings);
+    } catch (e) {
+      _error = 'Failed to update insurance rate: $e';
+      debugPrint(_error);
+    }
   }
 
   Future<void> updateOvertimeRate(double rate) async {
     if (_settings == null) return;
-    final newSettings = _settings!.copyWith(overtimeRate: rate);
-    await saveSettings(newSettings);
+    try {
+      // Ensure overtime rate is at least 1.0 (100%)
+      final clampedRate = rate.clamp(1.0, 3.0);
+      final newSettings = _settings!.copyWith(overtimeRate: clampedRate);
+      await saveSettings(newSettings);
+    } catch (e) {
+      _error = 'Failed to update overtime rate: $e';
+      debugPrint(_error);
+    }
   }
 
   Future<void> updateThemeMode(ThemeMode? mode, BuildContext context) async {
