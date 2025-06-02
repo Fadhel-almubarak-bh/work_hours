@@ -158,29 +158,70 @@ class HiveDb {
   }
 
   static Map<String, dynamic> getStatsForRange(DateTime start, DateTime end) {
-    int totalMinutes = 0;
-    int workDays = 0;
-    int offDays = 0;
+    try {
+      int totalMinutes = 0;
+      int workDays = 0;
+      int offDays = 0;
+      int nonWorkingDays = 0;
+      final dailyTarget = getDailyTargetMinutes();
+      final workDaysSetting = getWorkDays();
 
-    for (var i = 0; i <= end.difference(start).inDays; i++) {
-      final date = start.add(Duration(days: i));
-      final entry = getDayEntry(date);
-      if (entry != null) {
-        if (entry['offDay'] == true) {
-          offDays++;
-          totalMinutes += getDailyTargetMinutes();
-        } else if (entry['duration'] != null) {
-          workDays++;
-          totalMinutes += (entry['duration'] as num).toInt();
+      debugPrint('\n🔍 [STATS_DEBUG] Calculating stats for range:');
+      debugPrint('Start date: ${DateFormat('yyyy-MM-dd').format(start)}');
+      debugPrint('End date: ${DateFormat('yyyy-MM-dd').format(end)}');
+
+      for (var day = start;
+          day.isBefore(end.add(const Duration(days: 1)));
+          day = day.add(const Duration(days: 1))) {
+        final dateKey = DateFormat('yyyy-MM-dd').format(day);
+        final entry = _workHoursBoxInstance.get(dateKey);
+        final weekdayIndex = day.weekday - 1; // 0-based index (0 = Monday)
+        final bool isConfiguredWorkDay = workDaysSetting[weekdayIndex];
+
+        if (entry != null) {
+          if (entry['offDay'] == true) {
+            offDays++;
+            debugPrint('📅 $dateKey: Off Day (Description: ${entry['description']})');
+          } else if (entry['duration'] != null) {
+            totalMinutes += (entry['duration'] as num).toInt();
+            workDays++;
+            debugPrint('📅 $dateKey: Work Day (Duration: ${entry['duration']} minutes)');
+          }
+        } else {
+          // If no entry and it's not a configured work day (e.g., Friday), count it as a non-working day
+          if (!isConfiguredWorkDay) {
+            nonWorkingDays++;
+            debugPrint('📅 $dateKey: Non-Work Day (${_getDayName(weekdayIndex)})');
+          } else {
+            debugPrint('📅 $dateKey: No entry');
+          }
         }
       }
-    }
 
-    return {
-      'totalMinutes': totalMinutes,
-      'workDays': workDays,
-      'offDays': offDays,
-    };
+      debugPrint('\n📊 [STATS_DEBUG] Final counts:');
+      debugPrint('Total Minutes: $totalMinutes');
+      debugPrint('Work Days: $workDays');
+      debugPrint('Off Days (Excused): $offDays');
+      debugPrint('Non-Work Days: $nonWorkingDays');
+      debugPrint('Total Days Off: ${offDays + nonWorkingDays}');
+
+      return {
+        'totalMinutes': totalMinutes,
+        'workDays': workDays,
+        'offDays': offDays,
+        'nonWorkingDays': nonWorkingDays,
+        'totalDaysOff': offDays + nonWorkingDays,
+      };
+    } catch (e) {
+      debugPrint('Error in getStatsForRange: $e');
+      return {
+        'totalMinutes': 0,
+        'workDays': 0,
+        'offDays': 0,
+        'nonWorkingDays': 0,
+        'totalDaysOff': 0,
+      };
+    }
   }
 
   static Map<String, Map<String, dynamic>> getAllEntries() {

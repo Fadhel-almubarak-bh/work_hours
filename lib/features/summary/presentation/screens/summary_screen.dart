@@ -60,6 +60,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
       final now = DateTime.now();
       final weekStart = now.subtract(Duration(days: now.weekday - 1));
       final monthStart = DateTime(now.year, now.month, 1);
+      final monthEnd = DateTime(now.year, now.month + 1, 0); // Last day of current month
       final lastMonthStart = DateTime(now.year, now.month - 1, 1);
       final lastMonthEnd = DateTime(now.year, now.month, 0);
 
@@ -83,15 +84,43 @@ class _SummaryScreenState extends State<SummaryScreen> {
         }
       }
 
-      final weekStats = HiveDb.getStatsForRange(weekStart, now.subtract(const Duration(days: 1)));
-      final monthStats = HiveDb.getStatsForRange(monthStart, now.subtract(const Duration(days: 1)));
-      final lastMonthStats = HiveDb.getStatsForRange(lastMonthStart, lastMonthEnd);
+      // Get all entries for the current month
+      final entries = await _repository.getAllWorkEntries();
+      int monthlyTotal = 0;
+      int overtimeMinutes = 0;
+      final dailyTargetMinutes = HiveDb.getDailyTargetMinutes();
 
-      // Calculate monthly total including today if checked out
-      int monthlyTotal = (monthStats['totalMinutes'] as num).toInt();
-      if (!isCurrentlyClockedIn && todayEntry != null && todayEntry['out'] != null) {
-        if (!isTodayOffDay && todayEntry['duration'] != null) {
-          monthlyTotal += (todayEntry['duration'] as num).toInt();
+      // Calculate monthly total and overtime for current month only
+      for (final entry in entries) {
+        // Only process entries from the current month
+        if (entry.date.year == now.year && entry.date.month == now.month) {
+          if (!entry.isOffDay) {
+            monthlyTotal += entry.duration;
+            if (entry.duration > dailyTargetMinutes) {
+              overtimeMinutes += (entry.duration - dailyTargetMinutes);
+            }
+          }
+        }
+      }
+
+      // Add today's minutes if not already included and not an off day
+      if (!isTodayOffDay && todayMinutes > 0) {
+        // Check if today's entry is already included in the monthly total
+        bool isTodayIncluded = false;
+        for (final entry in entries) {
+          if (entry.date.year == now.year && 
+              entry.date.month == now.month && 
+              entry.date.day == now.day) {
+            isTodayIncluded = true;
+            break;
+          }
+        }
+
+        if (!isTodayIncluded) {
+          monthlyTotal += todayMinutes;
+          if (todayMinutes > dailyTargetMinutes) {
+            overtimeMinutes += (todayMinutes - dailyTargetMinutes);
+          }
         }
       }
 
@@ -99,58 +128,55 @@ class _SummaryScreenState extends State<SummaryScreen> {
       final workDays = HiveDb.getWorkDays();
       final dailyTargetHours = HiveDb.getDailyTargetHours();
 
-      // Calculate expected work days for current month up to today
+      // Calculate expected work days for entire current month
       int expectedWorkDays = 0;
-      for (var day = monthStart; day.isBefore(now.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+      for (var day = monthStart; day.isBefore(monthEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
         if (workDays[day.weekday - 1]) {
           expectedWorkDays++;
         }
       }
 
-      // Calculate expected minutes for current month
+      // Calculate expected minutes for entire current month
       final currentMonthExpectedMinutes = expectedWorkDays * dailyTargetHours * 60;
 
-      // Calculate overtime (only count overtime after daily target is met)
-      int overtimeMinutes = 0;
-      final entries = await _repository.getAllWorkEntries();
-      for (final entry in entries) {
-        if (entry.date.isAfter(monthStart.subtract(const Duration(days: 1))) && 
-            entry.date.isBefore(now.add(const Duration(days: 1)))) {
-          final dayMinutes = entry.duration;
-          if (dayMinutes > dailyTargetHours * 60) {
-            overtimeMinutes += (dayMinutes - (dailyTargetHours * 60)).toInt();
-          }
+      // Get stats excluding today
+      final weekStats = HiveDb.getStatsForRange(weekStart, now.subtract(const Duration(days: 1)));
+      final monthStats = HiveDb.getStatsForRange(monthStart, now.subtract(const Duration(days: 1)));
+      final lastMonthStats = HiveDb.getStatsForRange(lastMonthStart, lastMonthEnd);
+
+      // Calculate monthly total including today if checked out
+      int monthlyTotalIncludingToday = (monthStats['totalMinutes'] as num).toInt();
+      if (!isCurrentlyClockedIn && todayEntry != null && todayEntry['out'] != null) {
+        if (todayEntry['offDay'] == true) {
+          monthlyTotalIncludingToday += HiveDb.getDailyTargetMinutes();
+        } else if (todayEntry['duration'] != null) {
+          monthlyTotalIncludingToday += (todayEntry['duration'] as num).toInt();
         }
       }
 
-      // Calculate expected work days for last month
-      int lastMonthExpectedWorkDays = 0;
-      for (var day = lastMonthStart; day.isBefore(lastMonthEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
-        if (workDays[day.weekday - 1]) {
-          lastMonthExpectedWorkDays++;
-        }
-      }
+      // Calculate overtime based on total expected minutes for the month
+      final overtimeMinutesNew = monthlyTotalIncludingToday - currentMonthExpectedMinutes;
 
-      // Calculate expected minutes for last month
-      final lastMonthExpectedMinutes = lastMonthExpectedWorkDays * dailyTargetHours * 60;
-
-      // Calculate last month overtime
-      int lastMonthOvertimeMinutes = 0;
-      for (final entry in entries) {
-        if (entry.date.isAfter(lastMonthStart.subtract(const Duration(days: 1))) && 
-            entry.date.isBefore(lastMonthEnd.add(const Duration(days: 1)))) {
-          final dayMinutes = entry.duration;
-          if (dayMinutes > dailyTargetHours * 60) {
-            lastMonthOvertimeMinutes += (dayMinutes - (dailyTargetHours * 60)).toInt();
-          }
-        }
-      }
-
-      final weeklyTotal = (weekStats['totalMinutes'] as num).toInt() + (isCurrentlyClockedIn ? 0 : todayMinutes);
+      // Print debug information for monthly calculations
+      debugPrint('\n📊 [MONTHLY CALCULATIONS DEBUG]');
+      debugPrint('==========================================');
+      debugPrint('Current Month: ${DateFormat('MMMM yyyy').format(now)}');
+      debugPrint('Month Start: $monthStart');
+      debugPrint('Month End: $monthEnd');
+      debugPrint('Expected Work Days: $expectedWorkDays');
+      debugPrint('Daily Target Hours: $dailyTargetHours');
+      debugPrint('Expected Minutes: $currentMonthExpectedMinutes');
+      debugPrint('Monthly Total Minutes: $monthlyTotalIncludingToday');
+      debugPrint('Overtime Minutes: $overtimeMinutesNew');
+      debugPrint('Progress: ${(monthlyTotalIncludingToday / currentMonthExpectedMinutes * 100).toStringAsFixed(1)}%');
+      debugPrint('Today Minutes: $todayMinutes');
+      debugPrint('Is Today Off Day: $isTodayOffDay');
+      debugPrint('Is Currently Clocked In: $isCurrentlyClockedIn');
+      debugPrint('==========================================\n');
 
       return {
-        'weeklyTotal': weeklyTotal,
-        'monthlyTotal': monthlyTotal,
+        'weeklyTotal': (weekStats['totalMinutes'] as num).toInt() + (isCurrentlyClockedIn ? 0 : todayMinutes),
+        'monthlyTotal': monthlyTotalIncludingToday,
         'lastMonthTotal': (lastMonthStats['totalMinutes'] as num).toInt(),
         'weeklyWorkDays': (weekStats['workDays'] as num).toInt() + (isCurrentlyClockedIn ? 0 : (!isTodayOffDay && todayMinutes > 0 ? 1 : 0)),
         'monthlyWorkDays': (monthStats['workDays'] as num).toInt() + (!isTodayOffDay && todayMinutes > 0 ? 1 : 0),
@@ -158,12 +184,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
         'weeklyOffDays': (weekStats['offDays'] as num).toInt() + (isTodayOffDay ? 1 : 0),
         'monthlyOffDays': (monthStats['offDays'] as num).toInt() + (isTodayOffDay ? 1 : 0),
         'lastMonthOffDays': (lastMonthStats['offDays'] as num).toInt(),
-        'overtimeMinutes': overtimeMinutes,
-        'lastMonthOvertimeMinutes': lastMonthOvertimeMinutes,
+        'overtimeMinutes': overtimeMinutesNew,
+        'lastMonthOvertimeMinutes': lastMonthStats['overtimeMinutes'] ?? 0,
         'currentMonthExpectedMinutes': currentMonthExpectedMinutes,
-        'lastMonthExpectedMinutes': lastMonthExpectedMinutes,
+        'lastMonthExpectedMinutes': lastMonthStats['expectedMinutes'] ?? 0,
       };
-      } catch (e) {
+    } catch (e) {
       debugPrint('Error calculating summary: $e');
       return {};
     } finally {
@@ -658,9 +684,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
       if (isWorkDay) {
         configuredWorkDays++;
-      if (entry != null) {
-        if (entry['offDay'] == true) {
-          offDays++;
+        if (entry != null) {
+          if (entry['offDay'] == true) {
+            offDays++;
           } else if (entry['duration'] != null || entry['in'] != null) {
             workedDays++;
           } else {
@@ -912,9 +938,21 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final monthlyWorkDays = summary['monthlyWorkDays'] ?? 0;
     final monthlyOffDays = summary['monthlyOffDays'] ?? 0;
 
+    // Calculate progress based on actual minutes vs expected minutes
     final progress = currentMonthExpectedMinutes > 0
         ? (monthlyTotal / currentMonthExpectedMinutes).clamp(0.0, 1.0)
         : 0.0;
+
+    // Print debug information for monthly progress
+    debugPrint('\n📊 [MONTHLY PROGRESS DEBUG]');
+    debugPrint('==========================================');
+    debugPrint('Monthly Total Minutes: $monthlyTotal');
+    debugPrint('Expected Minutes: $currentMonthExpectedMinutes');
+    debugPrint('Progress Percentage: ${(progress * 100).toStringAsFixed(1)}%');
+    debugPrint('Overtime Minutes: $overtimeMinutes');
+    debugPrint('Work Days: $monthlyWorkDays');
+    debugPrint('Off Days: $monthlyOffDays');
+    debugPrint('==========================================\n');
     
     return Card(
       child: Padding(
@@ -943,9 +981,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
               backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
               minHeight: 8,
               borderRadius: BorderRadius.circular(4),
-                  ),
+            ),
             const SizedBox(height: 16),
-                      Row(
+            Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                 Column(
@@ -977,8 +1015,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                                   Text(
                       '${(currentMonthExpectedMinutes ~/ 60)}h ${(currentMonthExpectedMinutes % 60)}m',
                       style: Theme.of(context).textTheme.titleMedium,
-                                  ),
-                                ],
+                    ),
+                  ],
                           ),
                         ],
                       ),
@@ -1017,8 +1055,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                                   Text(
                       '$monthlyWorkDays days',
                       style: Theme.of(context).textTheme.titleMedium,
-                                  ),
-                                ],
+                    ),
+                  ],
                           ),
                         ],
                       ),
@@ -1039,7 +1077,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
           ],
         ),
       ),
-        );
+    );
   }
 
   Widget _buildWeeklyBarChart() {
