@@ -1,17 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../data/repositories/work_hours_repository.dart';
-import '../../data/models/settings.dart';
-import '../../core/theme/theme_provider.dart';
-import '../../data/local/hive_db.dart';
-import 'package:file_picker/file_picker.dart';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
-import 'package:excel/excel.dart';
+import '../../../../data/repositories/work_hours_repository.dart';
+import '../../../../data/models/settings.dart';
+import '../../../../core/theme/theme_provider.dart';
 
 class SettingsController extends ChangeNotifier {
   final WorkHoursRepository _repository;
-  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-  
   bool _isLoading = false;
   Settings? _settings;
   String? _error;
@@ -140,176 +133,11 @@ class SettingsController extends ChangeNotifier {
     return '${(value * 100).toStringAsFixed(1)}%';
   }
 
-  Future<void> exportDataToExcel(BuildContext context) async {
-    try {
-      final result = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save Excel File',
-        fileName: 'work_hours_export.xlsx',
-        type: FileType.custom,
-        allowedExtensions: ['xlsx'],
-      );
-
-      if (result != null) {
-        final excel = Excel.createExcel();
-        final sheet = excel.sheets.values.first;
-
-        // Add headers
-        sheet.appendRow([
-          TextCellValue('Date'),
-          TextCellValue('Clock In'),
-          TextCellValue('Clock Out'),
-          TextCellValue('Hours'),
-          TextCellValue('Overtime'),
-        ]);
-
-        // Get work entries from repository
-        final entries = await _repository.getAllWorkEntries();
-        final settings = await _repository.getSettings();
-        
-        for (final entry in entries) {
-          final totalHours = entry.duration / 60.0;
-          final expectedHours = settings?.dailyTargetHours ?? 8.0;
-          final overtime = totalHours > expectedHours ? totalHours - expectedHours : 0.0;
-          final regularHours = totalHours - overtime;
-
-          sheet.appendRow([
-            TextCellValue(entry.date.toString()),
-            TextCellValue(entry.clockIn.toString()),
-            TextCellValue(entry.clockOut?.toString() ?? ''),
-            TextCellValue(regularHours.toStringAsFixed(2)),
-            TextCellValue(overtime.toStringAsFixed(2)),
-          ]);
-        }
-
-        // Save the file
-        final bytes = excel.encode();
-        if (bytes != null) {
-          final file = File(result);
-          await file.writeAsBytes(bytes);
-          
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Data exported successfully')),
-            );
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Error exporting data: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error exporting data: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> importDataFromExcel(BuildContext context) async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['xlsx'],
-      );
-
-      if (result != null) {
-        final file = File(result.files.single.path!);
-        final bytes = await file.readAsBytes();
-        final excel = Excel.decodeBytes(bytes);
-        final sheet = excel.sheets.values.first;
-
-        // Skip header row
-        for (var row in sheet.rows.skip(1)) {
-          if (row.length >= 5) {
-            final dateStr = row[0]?.value.toString() ?? '';
-            final clockInStr = row[1]?.value.toString() ?? '';
-            final clockOutStr = row[2]?.value.toString() ?? '';
-            final hoursStr = row[3]?.value.toString() ?? '0';
-            final overtimeStr = row[4]?.value.toString() ?? '0';
-
-            if (dateStr.isNotEmpty && clockInStr.isNotEmpty) {
-              final date = DateTime.parse(dateStr);
-              final clockIn = DateTime.parse(clockInStr);
-              final clockOut = clockOutStr.isNotEmpty ? DateTime.parse(clockOutStr) : null;
-              final hours = double.parse(hoursStr);
-              final overtime = double.parse(overtimeStr);
-
-              await _repository.addWorkEntry(
-                date: date,
-                clockIn: clockIn,
-                clockOut: clockOut,
-                hours: hours,
-                overtime: overtime,
-              );
-            }
-          }
-        }
-
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Data imported successfully')),
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('Error importing data: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error importing data: $e')),
-        );
-      }
-    }
-  }
-
   Future<void> printDebugInfo(BuildContext context) async {
     try {
       final entries = await _repository.getAllWorkEntries();
       final settings = await _repository.getSettings();
       
-      // Print to console
-      debugPrint('\n🔧 [SETTINGS DEBUG INFO]');
-      debugPrint('==========================================');
-      
-      // Settings Information
-      debugPrint('\n⚙️ Settings:');
-      debugPrint('----------------------');
-      debugPrint('Monthly Salary: ${settings?.monthlySalary}');
-      debugPrint('Daily Target Hours: ${settings?.dailyTargetHours}');
-      debugPrint('Currency: ${settings?.currency}');
-      debugPrint('Insurance Rate: ${(settings?.insuranceRate ?? 0) * 100}%');
-      debugPrint('Overtime Rate: ${(settings?.overtimeRate ?? 0) * 100}%');
-      debugPrint('Theme Mode: ${settings?.themeMode}');
-      
-      // Work Days Configuration
-      debugPrint('\n📅 Work Days Configuration:');
-      debugPrint('----------------------');
-      final workDays = settings?.workDays ?? [];
-      final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      for (var i = 0; i < 7; i++) {
-        debugPrint('${days[i]}: ${workDays[i] ? '✓' : '✗'}');
-      }
-      
-      // Work Entries Summary
-      debugPrint('\n📊 Work Entries Summary:');
-      debugPrint('----------------------');
-      debugPrint('Total Entries: ${entries.length}');
-      
-      // Group entries by month
-      final entriesByMonth = <String, List<dynamic>>{};
-      for (final entry in entries) {
-        final monthKey = '${entry.date.year}-${entry.date.month.toString().padLeft(2, '0')}';
-        entriesByMonth.putIfAbsent(monthKey, () => []).add(entry);
-      }
-      
-      // Print monthly statistics
-      debugPrint('\n📅 Monthly Statistics:');
-      debugPrint('----------------------');
-      entriesByMonth.forEach((month, monthEntries) {
-        final totalMinutes = monthEntries.fold<int>(0, (sum, e) => sum + (e.duration as int));
-        final totalHours = totalMinutes / 60;
-        debugPrint('$month: ${monthEntries.length} entries, ${totalHours.toStringAsFixed(1)} hours');
-      });
-      
-      // Show dialog with the same information
       final debugInfo = StringBuffer();
       debugInfo.writeln('=== Debug Information ===');
       debugInfo.writeln('\nSettings:');
@@ -460,7 +288,6 @@ class SettingsController extends ChangeNotifier {
       final now = DateTime.now();
       final weekStart = now.subtract(Duration(days: now.weekday - 1));
       final monthStart = DateTime(now.year, now.month, 1);
-      final monthEnd = DateTime(now.year, now.month + 1, 0);
       
       final settings = await _repository.getSettings();
       if (settings == null) {
@@ -498,22 +325,11 @@ class SettingsController extends ChangeNotifier {
         e.date.isBefore(DateTime(now.year, now.month + 1, 1))
       ).toList();
       
-      // Calculate expected work days for the month
-      int expectedWorkDays = 0;
-      for (var day = 1; day <= monthEnd.day; day++) {
-        final date = DateTime(now.year, now.month, day);
-        if (settings.workDays[date.weekday - 1]) {
-          expectedWorkDays++;
-        }
-      }
-      
       final monthMinutes = monthEntries.fold<int>(0, (sum, e) => sum + e.duration);
-      final monthExpectedMinutes = expectedWorkDays * settings.dailyTargetHours * 60;
+      final monthExpectedMinutes = settings.dailyTargetHours * 60 * settings.workDays.where((d) => d).length * 4; // Approximate
       final monthOvertime = monthMinutes > monthExpectedMinutes ? monthMinutes - monthExpectedMinutes : 0;
       
       debugPrint('Month Start: $monthStart');
-      debugPrint('Month End: $monthEnd');
-      debugPrint('Expected Work Days: $expectedWorkDays');
       debugPrint('Entries This Month: ${monthEntries.length}');
       debugPrint('Minutes Worked: $monthMinutes');
       debugPrint('Expected Minutes: $monthExpectedMinutes');
@@ -570,4 +386,4 @@ class SettingsController extends ChangeNotifier {
       }
     }
   }
-}
+} 

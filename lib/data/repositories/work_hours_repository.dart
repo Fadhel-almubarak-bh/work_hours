@@ -190,7 +190,11 @@ class WorkHoursRepository {
     final hourlyRate = dailyRate / settings.dailyTargetHours;
     final overtimeRate = hourlyRate * settings.overtimeRate;
     final overtimePay = overtimeMinutes * overtimeRate / 60;
-    final workDaysEarnings = (actualMinutes * hourlyRate / 60) + overtimePay;
+    
+    // Calculate regular hours earnings (excluding overtime)
+    final regularHoursEarnings = (actualMinutes - overtimeMinutes) * hourlyRate / 60;
+    // Add overtime pay separately
+    final workDaysEarnings = regularHoursEarnings + overtimePay;
     final offDaysEarnings = offDaysCount * dailyRate;
     final totalEarnings = workDaysEarnings + offDaysEarnings;
     final earningsAfterInsurance = totalEarnings * (1 - settings.insuranceRate);

@@ -44,6 +44,7 @@ class SummaryScreen extends StatefulWidget {
 class _SummaryScreenState extends State<SummaryScreen> {
   bool _isCalculating = false;
   Future<Map<String, dynamic>>? _summaryFuture;
+  final WorkHoursRepository _repository = WorkHoursRepository();
 
   @override
   void initState() {
@@ -57,7 +58,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
     try {
       final now = DateTime.now();
-      final weekStart = now.subtract(Duration(days: (now.weekday + 1) % 7));
+      final weekStart = now.subtract(Duration(days: now.weekday - 1));
       final monthStart = DateTime(now.year, now.month, 1);
       final lastMonthStart = DateTime(now.year, now.month - 1, 1);
       final lastMonthEnd = DateTime(now.year, now.month, 0);
@@ -65,10 +66,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
       final todayEntry = HiveDb.getDayEntry(now);
       int todayMinutes = 0;
       bool isCurrentlyClockedIn = false;
+      bool isTodayOffDay = false;
 
       if (todayEntry != null) {
-        if (todayEntry['offDay'] == true) {
-          todayMinutes = HiveDb.getDailyTargetMinutes();
+        isTodayOffDay = todayEntry['offDay'] == true;
+        if (isTodayOffDay) {
+          todayMinutes = 0; // Don't count off days in total minutes
         } else if (todayEntry['duration'] != null) {
           todayMinutes = (todayEntry['duration'] as num).toInt();
         }
@@ -87,9 +90,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
       // Calculate monthly total including today if checked out
       int monthlyTotal = (monthStats['totalMinutes'] as num).toInt();
       if (!isCurrentlyClockedIn && todayEntry != null && todayEntry['out'] != null) {
-        if (todayEntry['offDay'] == true) {
-          monthlyTotal += HiveDb.getDailyTargetMinutes();
-        } else if (todayEntry['duration'] != null) {
+        if (!isTodayOffDay && todayEntry['duration'] != null) {
           monthlyTotal += (todayEntry['duration'] as num).toInt();
         }
       }
@@ -98,7 +99,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
       final workDays = HiveDb.getWorkDays();
       final dailyTargetHours = HiveDb.getDailyTargetHours();
 
-      // Calculate expected work days for current month
+      // Calculate expected work days for current month up to today
       int expectedWorkDays = 0;
       for (var day = monthStart; day.isBefore(now.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
         if (workDays[day.weekday - 1]) {
@@ -109,8 +110,18 @@ class _SummaryScreenState extends State<SummaryScreen> {
       // Calculate expected minutes for current month
       final currentMonthExpectedMinutes = expectedWorkDays * dailyTargetHours * 60;
 
-      // Calculate overtime
-      final overtimeMinutes = monthlyTotal - currentMonthExpectedMinutes;
+      // Calculate overtime (only count overtime after daily target is met)
+      int overtimeMinutes = 0;
+      final entries = await _repository.getAllWorkEntries();
+      for (final entry in entries) {
+        if (entry.date.isAfter(monthStart.subtract(const Duration(days: 1))) && 
+            entry.date.isBefore(now.add(const Duration(days: 1)))) {
+          final dayMinutes = entry.duration;
+          if (dayMinutes > dailyTargetHours * 60) {
+            overtimeMinutes += (dayMinutes - (dailyTargetHours * 60)).toInt();
+          }
+        }
+      }
 
       // Calculate expected work days for last month
       int lastMonthExpectedWorkDays = 0;
@@ -124,7 +135,16 @@ class _SummaryScreenState extends State<SummaryScreen> {
       final lastMonthExpectedMinutes = lastMonthExpectedWorkDays * dailyTargetHours * 60;
 
       // Calculate last month overtime
-      final lastMonthOvertimeMinutes = (lastMonthStats['totalMinutes'] as num).toInt() - lastMonthExpectedMinutes;
+      int lastMonthOvertimeMinutes = 0;
+      for (final entry in entries) {
+        if (entry.date.isAfter(lastMonthStart.subtract(const Duration(days: 1))) && 
+            entry.date.isBefore(lastMonthEnd.add(const Duration(days: 1)))) {
+          final dayMinutes = entry.duration;
+          if (dayMinutes > dailyTargetHours * 60) {
+            lastMonthOvertimeMinutes += (dayMinutes - (dailyTargetHours * 60)).toInt();
+          }
+        }
+      }
 
       final weeklyTotal = (weekStats['totalMinutes'] as num).toInt() + (isCurrentlyClockedIn ? 0 : todayMinutes);
 
@@ -132,11 +152,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
         'weeklyTotal': weeklyTotal,
         'monthlyTotal': monthlyTotal,
         'lastMonthTotal': (lastMonthStats['totalMinutes'] as num).toInt(),
-        'weeklyWorkDays': (weekStats['workDays'] as num).toInt() + (isCurrentlyClockedIn ? 0 : (todayMinutes > 0 ? 1 : 0)),
-        'monthlyWorkDays': (monthStats['workDays'] as num).toInt(),
+        'weeklyWorkDays': (weekStats['workDays'] as num).toInt() + (isCurrentlyClockedIn ? 0 : (!isTodayOffDay && todayMinutes > 0 ? 1 : 0)),
+        'monthlyWorkDays': (monthStats['workDays'] as num).toInt() + (!isTodayOffDay && todayMinutes > 0 ? 1 : 0),
         'lastMonthWorkDays': (lastMonthStats['workDays'] as num).toInt(),
-        'weeklyOffDays': (weekStats['offDays'] as num).toInt() + (isCurrentlyClockedIn ? 0 : (todayEntry?['offDay'] == true ? 1 : 0)),
-        'monthlyOffDays': (monthStats['offDays'] as num).toInt(),
+        'weeklyOffDays': (weekStats['offDays'] as num).toInt() + (isTodayOffDay ? 1 : 0),
+        'monthlyOffDays': (monthStats['offDays'] as num).toInt() + (isTodayOffDay ? 1 : 0),
         'lastMonthOffDays': (lastMonthStats['offDays'] as num).toInt(),
         'overtimeMinutes': overtimeMinutes,
         'lastMonthOvertimeMinutes': lastMonthOvertimeMinutes,
@@ -638,9 +658,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
       if (isWorkDay) {
         configuredWorkDays++;
-        if (entry != null) {
-          if (entry['offDay'] == true) {
-            offDays++;
+      if (entry != null) {
+        if (entry['offDay'] == true) {
+          offDays++;
           } else if (entry['duration'] != null || entry['in'] != null) {
             workedDays++;
           } else {
@@ -652,19 +672,36 @@ class _SummaryScreenState extends State<SummaryScreen> {
       }
     }
 
+    // Print overtime debug information
+    debugPrint('\n⏰ [OVERTIME DEBUG INFO]');
+    debugPrint('==========================================');
+    debugPrint('Current Month Overtime:');
+    debugPrint('----------------------');
+    debugPrint('Total Minutes: $monthlyTotal');
+    debugPrint('Expected Minutes: $currentMonthExpectedMinutes');
+    debugPrint('Overtime Minutes: $overtimeMinutes');
+    debugPrint('Overtime Hours: ${overtimeHours.toStringAsFixed(2)}');
+    debugPrint('\nWork Days Analysis:');
+    debugPrint('----------------------');
+    debugPrint('Configured Work Days: $configuredWorkDays');
+    debugPrint('Worked Days: $workedDays');
+    debugPrint('Off Days: $offDays');
+    debugPrint('Missed Days: $missedDays');
+    debugPrint('==========================================\n');
+
     return Card(
       elevation: 4,
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Overtime Tracker',
-                  style: Theme.of(context).textTheme.titleLarge,
+                      children: [
+                        Text(
+              'Overtime Tracker',
+                          style: Theme.of(context).textTheme.titleLarge,
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -684,8 +721,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 16),
+                        ),
+                        const SizedBox(height: 16),
             SizedBox(
               height: 220,
               child: SfRadialGauge(
@@ -697,12 +734,29 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     maximum: maxGaugeValue,
                     interval: maxGaugeValue / 3,
                     showLabels: true,
-                    showTicks: true,
+                    showLastLabel: true,
                     radiusFactor: 0.8,
+                    labelFormat: '{value}h',
+                    numberFormat: NumberFormat.compact(),
                     axisLineStyle: const AxisLineStyle(
                       thickness: 10,
                       cornerStyle: CornerStyle.bothCurve,
                       color: Colors.black12,
+                    ),
+                    majorTickStyle: const MajorTickStyle(
+                      length: 0.2,
+                      thickness: 1.5,
+                      color: Colors.black,
+                    ),
+                    minorTickStyle: const MinorTickStyle(
+                      length: 0.1,
+                      thickness: 1,
+                      color: Colors.black,
+                    ),
+                    axisLabelStyle: const GaugeTextStyle(
+                      color: Colors.black,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
                     ),
                     pointers: [
                       NeedlePointer(
@@ -786,7 +840,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                       'Work Days',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                    ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -835,8 +889,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     Expanded(
                       child: Text(
                         'You have $missedDays missed work ${missedDays == 1 ? 'day' : 'days'} this month',
-                        style: const TextStyle(
-                          color: Colors.red,
+                style: const TextStyle(
+                  color: Colors.red,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -850,7 +904,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
       ),
     );
   }
-
+  
   Widget _buildMonthlyProgress(Map<String, dynamic> summary) {
     final monthlyTotal = summary['monthlyTotal'] ?? 0;
     final currentMonthExpectedMinutes = summary['currentMonthExpectedMinutes'] ?? 0;
@@ -861,7 +915,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final progress = currentMonthExpectedMinutes > 0
         ? (monthlyTotal / currentMonthExpectedMinutes).clamp(0.0, 1.0)
         : 0.0;
-
+    
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -869,123 +923,123 @@ class _SummaryScreenState extends State<SummaryScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Monthly Progress',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                Text(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Monthly Progress',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        Text(
                   '${(progress * 100).toStringAsFixed(1)}%',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     color: progress >= 1.0 ? Colors.green : Theme.of(context).colorScheme.primary,
-                  ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
             const SizedBox(height: 16),
             LinearProgressIndicator(
               value: progress,
               backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
               minHeight: 8,
               borderRadius: BorderRadius.circular(4),
-            ),
+                  ),
             const SizedBox(height: 16),
-            Row(
+                      Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
+                        children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
+                                children: [
+                Text(
                       'Hours Worked',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
                       '${(monthlyTotal ~/ 60)}h ${(monthlyTotal % 60)}m',
                       style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ],
                 ),
+              ],
+            ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
+                                children: [
+                                  Text(
                       'Target',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
+                                    ),
+                                  ),
+              const SizedBox(height: 4),
+                                  Text(
                       '${(currentMonthExpectedMinutes ~/ 60)}h ${(currentMonthExpectedMinutes % 60)}m',
                       style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                                  ),
+                                ],
+                          ),
+                        ],
+                      ),
             const SizedBox(height: 16),
-            Row(
+                      Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
+                        children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
+                                children: [
+                                  Text(
                       'Overtime',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
+                                    ),
+                                  ),
+              const SizedBox(height: 4),
+                                  Text(
                       '${overtimeMinutes >= 0 ? '+' : ''}${(overtimeMinutes ~/ 60)}h ${(overtimeMinutes.abs() % 60)}m',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: overtimeMinutes >= 0 ? Colors.green : Colors.orange,
-                      ),
-                    ),
-                  ],
-                ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
+                                children: [
+                                  Text(
                       'Work Days',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
                       '$monthlyWorkDays days',
                       style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                                  ),
+                                ],
+                          ),
+                        ],
+                      ),
             if (monthlyOffDays > 0) ...[
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text(
+                        children: [
+                          Text(
                     'Off Days: $monthlyOffDays',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
+                            ),
+                          ),
+                        ],
+                      ),
             ],
           ],
         ),
       ),
-    );
+        );
   }
 
   Widget _buildWeeklyBarChart() {
@@ -1037,13 +1091,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
             padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+      children: [
+        Text(
                   'Weekly Work Hours',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
-                Text(
+        Text(
                   'Hours worked each day this week',
                   style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
@@ -1065,9 +1119,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
                                 padding: const EdgeInsets.only(top: 8.0),
                                 child: Text(
                                   weekdays[value.toInt()],
-                                  style: const TextStyle(
+          style: const TextStyle(
                                     fontSize: 12,
-                                    fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               );
@@ -1198,7 +1252,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      children: [
             Text(
               'Last Month Summary',
               style: Theme.of(context).textTheme.titleLarge,
@@ -1274,10 +1328,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            Container(
+        Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-              decoration: BoxDecoration(
+          decoration: BoxDecoration(
                 color: lastMonthOvertimeMinutes >= 0
                     ? Colors.green.withOpacity(0.1)
                     : Colors.red.withOpacity(0.1),
