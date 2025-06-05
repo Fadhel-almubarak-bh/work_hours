@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import '../../../../core/constants/currency_constants.dart';
 
 class SettingsCard extends StatelessWidget {
   final String title;
@@ -40,6 +41,7 @@ class CurrencyTextField extends StatefulWidget {
   final double value;
   final Function(double) onChanged;
   final String? errorText;
+  final String currency;
 
   const CurrencyTextField({
     super.key,
@@ -47,6 +49,7 @@ class CurrencyTextField extends StatefulWidget {
     required this.value,
     required this.onChanged,
     this.errorText,
+    required this.currency,
   });
 
   @override
@@ -102,7 +105,7 @@ class _CurrencyTextFieldState extends State<CurrencyTextField> {
       decoration: InputDecoration(
         labelText: widget.label,
         errorText: widget.errorText,
-        prefixText: '\$ ',
+        prefixText: '${widget.currency} ',
         border: const OutlineInputBorder(),
       ),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -217,97 +220,86 @@ class WorkDaysSelector extends StatelessWidget {
   }
 }
 
-class PercentageSlider extends StatefulWidget {
+class PercentageTextField extends StatefulWidget {
   final String label;
   final double value;
-  final ValueChanged<double> onChanged;
+  final Function(double) onChanged;
+  final String? errorText;
   final bool isOvertime;
 
-  const PercentageSlider({
+  const PercentageTextField({
     super.key,
     required this.label,
     required this.value,
     required this.onChanged,
+    this.errorText,
     this.isOvertime = false,
   });
 
   @override
-  State<PercentageSlider> createState() => _PercentageSliderState();
+  State<PercentageTextField> createState() => _PercentageTextFieldState();
 }
 
-class _PercentageSliderState extends State<PercentageSlider> {
-  late double _currentValue;
+class _PercentageTextFieldState extends State<PercentageTextField> {
+  late TextEditingController _controller;
   Timer? _debounceTimer;
+
+  String _formatNumber(double number) {
+    // Remove trailing .0 if it's a whole number
+    return number == number.roundToDouble() 
+        ? number.round().toString() 
+        : number.toString();
+  }
 
   @override
   void initState() {
     super.initState();
-    _currentValue = widget.value;
+    _controller = TextEditingController(text: _formatNumber(widget.value * 100));
   }
 
   @override
-  void didUpdateWidget(PercentageSlider oldWidget) {
+  void didUpdateWidget(PercentageTextField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.value != widget.value) {
-      _currentValue = widget.value;
+    if (oldWidget.value != widget.value && !_controller.text.contains('.')) {
+      _controller.text = _formatNumber(widget.value * 100);
     }
   }
 
-  void _handleValueChange(double value) {
-    setState(() {
-      _currentValue = value;
-    });
-
-    // Debounce the update to avoid too many saves
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
-      widget.onChanged(value);
-    });
+  void _handleValueChange(String value) {
+    final number = double.tryParse(value);
+    if (number != null) {
+      // Convert percentage to decimal
+      final decimalValue = number / 100;
+      // Debounce the update to avoid too many saves
+      _debounceTimer?.cancel();
+      _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+        widget.onChanged(decimalValue);
+      });
+    }
   }
 
   @override
   void dispose() {
+    _controller.dispose();
     _debounceTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // For overtime, we need to handle values > 1.0
-    final displayValue = widget.isOvertime ? _currentValue : _currentValue.clamp(0.0, 1.0);
-    final maxValue = widget.isOvertime ? 3.0 : 1.0; // Increased max for overtime
-    final divisions = widget.isOvertime ? 300 : 100; // More divisions for finer control
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          widget.label,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: Slider(
-                value: displayValue,
-                min: 0.0,
-                max: maxValue,
-                divisions: divisions,
-                label: '${(displayValue * 100).round()}%',
-                onChanged: _handleValueChange,
-              ),
-            ),
-            SizedBox(
-              width: 80,
-              child: Text(
-                '${(displayValue * 100).round()}%',
-                style: Theme.of(context).textTheme.bodyLarge,
-                textAlign: TextAlign.right,
-              ),
-            ),
-          ],
-        ),
+    return TextField(
+      decoration: InputDecoration(
+        labelText: widget.label,
+        errorText: widget.errorText,
+        suffixText: '%',
+        border: const OutlineInputBorder(),
+      ),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
       ],
+      controller: _controller,
+      onChanged: _handleValueChange,
     );
   }
 }
@@ -345,15 +337,13 @@ class _CurrencySelectorState extends State<CurrencySelector> {
 
   @override
   Widget build(BuildContext context) {
-    final currencies = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD'];
-    
     return DropdownButtonFormField<String>(
       value: _selectedCurrency,
       decoration: const InputDecoration(
         labelText: 'Currency',
         border: OutlineInputBorder(),
       ),
-      items: currencies.map((currency) {
+      items: CurrencyConstants.supportedCurrencies.map((currency) {
         return DropdownMenuItem(
           value: currency,
           child: Text(currency),

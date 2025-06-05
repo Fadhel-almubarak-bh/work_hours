@@ -157,23 +157,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
       // Calculate overtime based on total expected minutes for the month
       final overtimeMinutesNew = monthlyTotalIncludingToday - currentMonthExpectedMinutes;
 
-      // Print debug information for monthly calculations
-      debugPrint('\n📊 [MONTHLY CALCULATIONS DEBUG]');
-      debugPrint('==========================================');
-      debugPrint('Current Month: ${DateFormat('MMMM yyyy').format(now)}');
-      debugPrint('Month Start: $monthStart');
-      debugPrint('Month End: $monthEnd');
-      debugPrint('Expected Work Days: $expectedWorkDays');
-      debugPrint('Daily Target Hours: $dailyTargetHours');
-      debugPrint('Expected Minutes: $currentMonthExpectedMinutes');
-      debugPrint('Monthly Total Minutes: $monthlyTotalIncludingToday');
-      debugPrint('Overtime Minutes: $overtimeMinutesNew');
-      debugPrint('Progress: ${(monthlyTotalIncludingToday / currentMonthExpectedMinutes * 100).toStringAsFixed(1)}%');
-      debugPrint('Today Minutes: $todayMinutes');
-      debugPrint('Is Today Off Day: $isTodayOffDay');
-      debugPrint('Is Currently Clocked In: $isCurrentlyClockedIn');
-      debugPrint('==========================================\n');
-
       return {
         'weeklyTotal': (weekStats['totalMinutes'] as num).toInt() + (isCurrentlyClockedIn ? 0 : todayMinutes),
         'monthlyTotal': monthlyTotalIncludingToday,
@@ -200,21 +183,14 @@ class _SummaryScreenState extends State<SummaryScreen> {
   void _refreshSummary() {
     setState(() {
       HiveDb.printAllWorkHourEntries();
-      debugPrint("---------------->");
       HiveDb.calculateAndPrintMonthlyOvertime();
 
       final currentMonthExpected = HiveDb.getCurrentMonthExpectedMinutes();
       final currentMonthOvertime = HiveDb.getMonthlyOvertime();
-      debugPrint("\n📅 [CURRENT MONTH]");
-      debugPrint("Expected Hours: ${formatDuration(currentMonthExpected)}");
-      debugPrint("Overtime: ${currentMonthOvertime >= 0 ? '+' : ''}${formatDuration(currentMonthOvertime.abs())}");
 
       final lastMonthExpected = HiveDb.getLastMonthExpectedMinutes();
       final lastMonthOvertime = HiveDb.getLastMonthOvertime();
-      debugPrint("\n📅 [LAST MONTH]");
-      debugPrint("Expected Hours: ${formatDuration(lastMonthExpected)}");
-      debugPrint("Overtime: ${lastMonthOvertime >= 0 ? '+' : ''}${formatDuration(lastMonthOvertime.abs())}");
-
+ 
       _summaryFuture = _calculateSummary();
     });
   }
@@ -658,13 +634,16 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final overtimeHours = overtimeMinutes / 60.0;
     // Set max gauge value to 20 hours (adjust as needed)
     final maxGaugeValue = 20.0;
-    double gaugeValue = overtimeHours.abs().clamp(0.0, maxGaugeValue);
-    double percentage = (gaugeValue / maxGaugeValue) * 100;
+    
+    // For the gauge, we'll show both positive and negative values
+    double gaugeValue = overtimeHours.clamp(-maxGaugeValue, maxGaugeValue);
+    double percentage = ((gaugeValue + maxGaugeValue) / (2 * maxGaugeValue)) * 100;
 
     final isAhead = overtimeMinutes >= 0;
-    final displayValue = formatDuration(overtimeMinutes.abs());
-    final statusText = isAhead ? 'ahead of schedule' : 'behind schedule';
-    final gaugeColor = isAhead ? Colors.green : Colors.red;
+    final displayValue = overtimeMinutes == 0 ? '0h 0m' : formatDuration(overtimeMinutes.abs());
+    final statusText = overtimeMinutes == 0 ? 'on schedule' : (isAhead ? 'ahead of schedule' : 'behind schedule');
+    final gaugeColor = overtimeMinutes == 0 ? Colors.blue : (isAhead ? Colors.green : Colors.red);
+
 
     // Calculate work statistics
     final workDays = HiveDb.getWorkDays();
@@ -676,7 +655,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
     int workedDays = 0;
     int offDays = 0;
     int missedDays = 0;
+    int totalMinutesWorked = 0;
+    int expectedMinutesUntilToday = 0;
 
+    // Calculate expected and actual minutes until today
     for (var day = monthStart; day.isBefore(today.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
       final weekdayIndex = day.weekday - 1;
       final bool isWorkDay = workDays[weekdayIndex];
@@ -684,11 +666,23 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
       if (isWorkDay) {
         configuredWorkDays++;
+        expectedMinutesUntilToday += HiveDb.getDailyTargetMinutes();
+        
         if (entry != null) {
           if (entry['offDay'] == true) {
             offDays++;
+            // Add target minutes for off days since they count towards the monthly target
+            totalMinutesWorked += HiveDb.getDailyTargetMinutes();
           } else if (entry['duration'] != null || entry['in'] != null) {
             workedDays++;
+            if (entry['duration'] != null) {
+              totalMinutesWorked += (entry['duration'] as num).toInt();
+            } else if (entry['in'] != null && entry['out'] == null) {
+              // For current day if still working
+              final clockInTime = DateTime.parse(entry['in']);
+              final currentDuration = now.difference(clockInTime).inMinutes;
+              totalMinutesWorked += currentDuration;
+            }
           } else {
             missedDays++;
           }
@@ -698,57 +692,55 @@ class _SummaryScreenState extends State<SummaryScreen> {
       }
     }
 
-    // Print overtime debug information
-    debugPrint('\n⏰ [OVERTIME DEBUG INFO]');
-    debugPrint('==========================================');
-    debugPrint('Current Month Overtime:');
-    debugPrint('----------------------');
-    debugPrint('Total Minutes: $monthlyTotal');
-    debugPrint('Expected Minutes: $currentMonthExpectedMinutes');
-    debugPrint('Overtime Minutes: $overtimeMinutes');
-    debugPrint('Overtime Hours: ${overtimeHours.toStringAsFixed(2)}');
-    debugPrint('\nWork Days Analysis:');
-    debugPrint('----------------------');
-    debugPrint('Configured Work Days: $configuredWorkDays');
-    debugPrint('Worked Days: $workedDays');
-    debugPrint('Off Days: $offDays');
-    debugPrint('Missed Days: $missedDays');
-    debugPrint('==========================================\n');
+    // Recalculate overtime based on actual minutes worked until today
+    final actualOvertimeMinutes = totalMinutesWorked - expectedMinutesUntilToday;
+    final actualOvertimeHours = actualOvertimeMinutes / 60.0;
+    
+    // Update gauge value with actual overtime
+    gaugeValue = actualOvertimeHours.clamp(-maxGaugeValue, maxGaugeValue);
+    percentage = ((gaugeValue + maxGaugeValue) / (2 * maxGaugeValue)) * 100;
+
+    // Update display values
+    final isActuallyAhead = actualOvertimeMinutes >= 0;
+    final actualDisplayValue = actualOvertimeMinutes == 0 ? '0h 0m' : formatDuration(actualOvertimeMinutes.abs());
+    final actualStatusText = actualOvertimeMinutes == 0 ? 'on schedule' : (isActuallyAhead ? 'ahead of schedule' : 'behind schedule');
+    final actualGaugeColor = actualOvertimeMinutes == 0 ? Colors.blue : (isActuallyAhead ? Colors.green : Colors.red);
+
 
     return Card(
       elevation: 4,
       child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-              'Overtime Tracker',
-                          style: Theme.of(context).textTheme.titleLarge,
+              children: [
+                Text(
+                  'Overtime Tracker',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: isAhead ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                    color: actualOvertimeMinutes >= 0 ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: isAhead ? Colors.green.withOpacity(0.3) : Colors.red.withOpacity(0.3),
+                      color: actualOvertimeMinutes >= 0 ? Colors.green.withOpacity(0.3) : Colors.red.withOpacity(0.3),
                     ),
                   ),
                   child: Text(
-                    statusText,
+                    actualStatusText,
                     style: TextStyle(
-                      color: isAhead ? Colors.green : Colors.red,
+                      color: actualOvertimeMinutes >= 0 ? Colors.green : Colors.red,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
               ],
-                        ),
-                        const SizedBox(height: 16),
+            ),
+            const SizedBox(height: 16),
             SizedBox(
               height: 220,
               child: SfRadialGauge(
@@ -758,7 +750,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   RadialAxis(
                     minimum: -maxGaugeValue,
                     maximum: maxGaugeValue,
-                    interval: maxGaugeValue / 3,
+                    interval: maxGaugeValue / 2,
                     showLabels: true,
                     showLastLabel: true,
                     radiusFactor: 0.8,
@@ -786,9 +778,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     ),
                     pointers: [
                       NeedlePointer(
-                        value: overtimeHours,
+                        value: gaugeValue,
                         needleLength: 0.7,
-                        needleColor: gaugeColor,
+                        needleColor: actualGaugeColor,
                         knobStyle: const KnobStyle(
                           knobRadius: 10,
                           sizeUnit: GaugeSizeUnit.logicalPixel,
@@ -800,9 +792,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
                         ),
                       ),
                       RangePointer(
-                        value: overtimeHours,
+                        value: gaugeValue,
                         width: 10,
-                        color: gaugeColor,
+                        color: actualGaugeColor,
                         enableAnimation: true,
                       ),
                     ],
@@ -829,15 +821,15 @@ class _SummaryScreenState extends State<SummaryScreen> {
                           children: [
                             const SizedBox(height: 20),
                             Text(
-                              displayValue,
+                              actualDisplayValue,
                               style: TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,
-                                color: gaugeColor,
+                                color: actualGaugeColor,
                               ),
                             ),
                             Text(
-                              '${(monthlyTotal / 60).toStringAsFixed(1)}h / ${(currentMonthExpectedMinutes / 60).toStringAsFixed(1)}h',
+                              '${(totalMinutesWorked / 60).toStringAsFixed(1)}h / ${(expectedMinutesUntilToday / 60).toStringAsFixed(1)}h',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -866,7 +858,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                       'Work Days',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -915,8 +907,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     Expanded(
                       child: Text(
                         'You have $missedDays missed work ${missedDays == 1 ? 'day' : 'days'} this month',
-                style: const TextStyle(
-                  color: Colors.red,
+                        style: const TextStyle(
+                          color: Colors.red,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -934,26 +926,60 @@ class _SummaryScreenState extends State<SummaryScreen> {
   Widget _buildMonthlyProgress(Map<String, dynamic> summary) {
     final monthlyTotal = summary['monthlyTotal'] ?? 0;
     final currentMonthExpectedMinutes = summary['currentMonthExpectedMinutes'] ?? 0;
-    final overtimeMinutes = summary['overtimeMinutes'] ?? 0;
     final monthlyWorkDays = summary['monthlyWorkDays'] ?? 0;
     final monthlyOffDays = summary['monthlyOffDays'] ?? 0;
 
+    // Get all entries for current month
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1);
+    final monthEnd = DateTime(now.year, now.month + 1, 0);
+    final workDays = HiveDb.getWorkDays();
+    final dailyTargetMinutes = HiveDb.getDailyTargetMinutes();
+
+    int totalWorkDays = 0;
+    int totalOffDays = 0;
+    int totalNonWorkDays = 0;
+    int totalMinutesWorked = 0;
+    int expectedMinutes = 0;
+    int actualWorkDays = 0;
+    int actualOffDays = 0;
+
+    // Calculate monthly statistics
+    for (var day = monthStart; day.isBefore(monthEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+      final weekdayIndex = day.weekday - 1;
+      final bool isWorkDay = workDays[weekdayIndex];
+      final entry = HiveDb.getDayEntry(day);
+
+      if (isWorkDay) {
+        totalWorkDays++;
+        expectedMinutes += dailyTargetMinutes;
+
+        if (entry != null) {
+          if (entry['offDay'] == true) {
+            totalOffDays++;
+            actualOffDays++;
+            totalMinutesWorked += dailyTargetMinutes;
+          } else if (entry['duration'] != null) {
+            actualWorkDays++;
+            totalMinutesWorked += (entry['duration'] as num).toInt();
+          } else if (entry['in'] != null && entry['out'] == null && day.isAtSameMomentAs(now)) {
+            actualWorkDays++;
+            final clockInTime = DateTime.parse(entry['in']);
+            final currentDuration = now.difference(clockInTime).inMinutes;
+            totalMinutesWorked += currentDuration;
+          }
+        }
+      } else {
+        totalNonWorkDays++;
+      }
+    }
+
     // Calculate progress based on actual minutes vs expected minutes
-    final progress = currentMonthExpectedMinutes > 0
-        ? (monthlyTotal / currentMonthExpectedMinutes).clamp(0.0, 1.0)
+    final progress = expectedMinutes > 0
+        ? (totalMinutesWorked / expectedMinutes).clamp(0.0, 1.0)
         : 0.0;
 
-    // Print debug information for monthly progress
-    debugPrint('\n📊 [MONTHLY PROGRESS DEBUG]');
-    debugPrint('==========================================');
-    debugPrint('Monthly Total Minutes: $monthlyTotal');
-    debugPrint('Expected Minutes: $currentMonthExpectedMinutes');
-    debugPrint('Progress Percentage: ${(progress * 100).toStringAsFixed(1)}%');
-    debugPrint('Overtime Minutes: $overtimeMinutes');
-    debugPrint('Work Days: $monthlyWorkDays');
-    debugPrint('Off Days: $monthlyOffDays');
-    debugPrint('==========================================\n');
-    
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -961,20 +987,20 @@ class _SummaryScreenState extends State<SummaryScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Monthly Progress',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        Text(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Monthly Progress',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                Text(
                   '${(progress * 100).toStringAsFixed(1)}%',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     color: progress >= 1.0 ? Colors.green : Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
+              ],
+            ),
             const SizedBox(height: 16),
             LinearProgressIndicator(
               value: progress,
@@ -985,95 +1011,79 @@ class _SummaryScreenState extends State<SummaryScreen> {
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
+              children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                Text(
+                  children: [
+                    Text(
                       'Hours Worked',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                      '${(monthlyTotal ~/ 60)}h ${(monthlyTotal % 60)}m',
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${(totalMinutesWorked ~/ 60)}h ${(totalMinutesWorked % 60)}m',
                       style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ],
                 ),
-              ],
-            ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
+                  children: [
+                    Text(
                       'Target',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-              const SizedBox(height: 4),
-                                  Text(
-                      '${(currentMonthExpectedMinutes ~/ 60)}h ${(currentMonthExpectedMinutes % 60)}m',
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${(expectedMinutes ~/ 60)}h ${(expectedMinutes % 60)}m',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ],
-                          ),
-                        ],
-                      ),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
-                      Row(
+            Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
+              children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                      'Overtime',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-              const SizedBox(height: 4),
-                                  Text(
-                      '${overtimeMinutes >= 0 ? '+' : ''}${(overtimeMinutes ~/ 60)}h ${(overtimeMinutes.abs() % 60)}m',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: overtimeMinutes >= 0 ? Colors.green : Colors.orange,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
+                  children: [
+                    Text(
                       'Work Days',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                      '$monthlyWorkDays days',
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$actualWorkDays / $totalWorkDays',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ],
-                          ),
-                        ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Off Days',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-            if (monthlyOffDays > 0) ...[
-                const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Text(
-                    'Off Days: $monthlyOffDays',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-            ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$actualOffDays',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -1281,7 +1291,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
     final List<ChartData> pieData = [
       ChartData('Work Days', lastMonthWorkDays.toDouble(), AppColors.infoLight),
-      ChartData('Off Days', lastMonthOffDays.toDouble(), Colors.blue),
+      ChartData('Off Days', lastMonthOffDays.toDouble(), AppColors.errorLight),
     ];
 
     return Card(

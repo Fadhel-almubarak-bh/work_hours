@@ -121,12 +121,51 @@ class HiveDb {
   }
 
   static int getMonthlyOvertime() {
-    final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month, 1);
-    final monthEnd = DateTime(now.year, now.month + 1, 0);
-    final totalMinutes = getTotalMinutesForRange(monthStart, monthEnd);
-    final expectedMinutes = getCurrentMonthExpectedMinutes();
-    return totalMinutes - expectedMinutes;
+    try {
+      final now = DateTime.now();
+      final firstOfMonth = DateTime(now.year, now.month, 1);
+      final today = DateTime(now.year, now.month, now.day);
+      final allEntries = getAllEntries();
+      final workDaysSetting = getWorkDays();
+      final dailyTarget = getDailyTargetMinutes();
+
+      int targetMinutes = 0;
+      int workedMinutes = 0;
+
+      // First, calculate target minutes for all work days from start of month until today
+      for (var day = firstOfMonth;
+          day.isBefore(today.add(const Duration(days: 1)));
+          day = day.add(const Duration(days: 1))) {
+        final weekdayIndex = day.weekday - 1;
+        if (workDaysSetting[weekdayIndex]) {
+          targetMinutes += dailyTarget;
+        }
+      }
+
+      // Then calculate actual minutes worked
+      for (var day = firstOfMonth;
+          day.isBefore(today.add(const Duration(days: 1)));
+          day = day.add(const Duration(days: 1))) {
+        final dateKey = DateFormat('yyyy-MM-dd').format(day);
+        final entry = allEntries[dateKey];
+        final weekdayIndex = day.weekday - 1;
+        final bool isConfiguredWorkDay = workDaysSetting[weekdayIndex];
+
+        if (entry != null) {
+          final bool isOffDay = entry['offDay'] as bool? ?? false;
+          final num? duration = entry['duration'] as num?;
+
+          if (duration != null) {
+            workedMinutes += duration.toInt();
+          }
+        }
+      }
+
+      return workedMinutes - targetMinutes;
+    } catch (e) {
+      debugPrint('Error in getMonthlyOvertime: $e');
+      return 0;
+    }
   }
 
   static int getLastMonthOvertime() {
@@ -350,55 +389,44 @@ class HiveDb {
 
       int targetMinutes = 0;
       int workedMinutes = 0;
-      int offDaysCount = 0;
       int workDaysCount = 0;
-      int missedWorkDays = 0;
       int extraWorkDays = 0;
-      int nonWorkingDaysCount = 0; // Count of days that are not work days according to settings
 
-      // Iterate through each day of the month up to today
+      // First, calculate target minutes for all work days from start of month until today
       for (var day = firstOfMonth;
-      day.isBefore(today.add(const Duration(days: 1)));
-      day = day.add(const Duration(days: 1))) {
+          day.isBefore(today.add(const Duration(days: 1)));
+          day = day.add(const Duration(days: 1))) {
+        final weekdayIndex = day.weekday - 1;
+        if (workDaysSetting[weekdayIndex]) {
+          targetMinutes += dailyTarget;
+        }
+      }
+
+      // Then calculate actual minutes worked
+      for (var day = firstOfMonth;
+          day.isBefore(today.add(const Duration(days: 1)));
+          day = day.add(const Duration(days: 1))) {
         final dateKey = DateFormat('yyyy-MM-dd').format(day);
         final entry = allEntries[dateKey];
-        final weekdayIndex = day.weekday - 1; // Convert to 0-based index (0 = Monday)
+        final weekdayIndex = day.weekday - 1;
         final bool isConfiguredWorkDay = workDaysSetting[weekdayIndex];
-
-        // Count non-working days from settings
-        if (!isConfiguredWorkDay) {
-          nonWorkingDaysCount++;
-          targetMinutes += dailyTarget; // Add target minutes for non-working days
-          debugPrint('\n📆 ${_getDayName(weekdayIndex)} $dateKey (Non-Working Day from Settings)');
-        } else {
-          targetMinutes += dailyTarget;
-          debugPrint('\n📆 ${_getDayName(weekdayIndex)} $dateKey (Configured Work Day)');
-        }
 
         if (entry != null) {
           final bool isOffDay = entry['offDay'] as bool? ?? false;
           final num? duration = entry['duration'] as num?;
 
-          if (isOffDay) {
-            workedMinutes += dailyTarget;
-            offDaysCount++;
-            debugPrint('   ✨ Off Day: +$dailyTarget minutes');
-          } else if (duration != null) {
+          if (duration != null) {
             workedMinutes += duration.toInt();
-
-            if (isConfiguredWorkDay) {
+            if (isConfiguredWorkDay && !isOffDay) {
               workDaysCount++;
+              debugPrint('\n📆 ${_getDayName(weekdayIndex)} $dateKey (Work Day)');
               debugPrint('   💪 Worked: +${duration.toInt()} minutes');
-            } else {
+            } else if (!isConfiguredWorkDay) {
               extraWorkDays++;
-              debugPrint('   🔍 Extra Work Day: +${duration.toInt()} minutes');
+              debugPrint('\n📆 ${_getDayName(weekdayIndex)} $dateKey (Extra Work Day)');
+              debugPrint('   🔍 Extra Work: +${duration.toInt()} minutes');
             }
           }
-        } else if (isConfiguredWorkDay) {
-          missedWorkDays++;
-          debugPrint('   ❌ No entry (missed work day)');
-        } else {
-          debugPrint('   ❌ No entry (non-work day)');
         }
       }
 
@@ -411,10 +439,7 @@ class HiveDb {
       debugPrint('🎯 Target Time : $targetMinutes min (${targetMinutes ~/ 60}h ${targetMinutes % 60}m)');
       debugPrint('⏱️ Worked Time : $workedMinutes min (${workedMinutes ~/ 60}h ${workedMinutes % 60}m)');
       debugPrint('   - Regular work days: $workDaysCount');
-      debugPrint('   - Off days counted: $offDaysCount');
       debugPrint('   - Extra work days: $extraWorkDays');
-      debugPrint('   - Missed work days: $missedWorkDays');
-      debugPrint('   - Non-working days from settings: $nonWorkingDaysCount');
       debugPrint('🔄 Overtime    : $sign${hours.abs()}h ${minutes.abs()}m (${overtime.abs()} minutes)');
     } catch (e) {
       debugPrint('Error in calculateAndPrintMonthlyOvertime: $e');
@@ -580,10 +605,10 @@ class HiveDb {
 
   static String getCurrency() {
     try {
-      return _settingsBoxInstance.get('currency', defaultValue: 'USD');
+      return _settingsBoxInstance.get('currency', defaultValue: 'BHD');
     } catch (e) {
       debugPrint('Error in getCurrency: $e');
-      return 'USD';
+      return 'BHD';
     }
   }
 

@@ -50,34 +50,39 @@ class _HomeScreenState extends State<HomeScreen> {
     return ValueListenableBuilder(
       valueListenable: HiveDb.getWorkHoursListenable(),
       builder: (context, Box workHours, _) {
-        return Scaffold(
-          body: _pages[_selectedIndex],
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: _onItemTapped,
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.home),
-                label: 'Home',
+        return ValueListenableBuilder(
+          valueListenable: HiveDb.getSettingsListenable(),
+          builder: (context, Box settings, _) {
+            return Scaffold(
+              body: _pages[_selectedIndex],
+              bottomNavigationBar: NavigationBar(
+                selectedIndex: _selectedIndex,
+                onDestinationSelected: _onItemTapped,
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.home),
+                    label: 'Home',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.history),
+                    label: 'History',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.summarize),
+                    label: 'Summary',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.attach_money),
+                    label: 'Salary',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.settings),
+                    label: 'Settings',
+                  ),
+                ],
               ),
-              NavigationDestination(
-                icon: Icon(Icons.history),
-                label: 'History',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.summarize),
-                label: 'Summary',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.attach_money),
-                label: 'Salary',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.settings),
-                label: 'Settings',
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );

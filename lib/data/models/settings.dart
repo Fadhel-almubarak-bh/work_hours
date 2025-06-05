@@ -30,7 +30,7 @@ class Settings {
     required this.monthlySalary,
     required this.dailyTargetHours,
     required this.workDays,
-    this.currency = 'USD',
+    this.currency = 'BHD',
     this.insuranceRate = 0.08,
     this.overtimeRate = 1.5,
     this.themeMode = ThemeMode.system,

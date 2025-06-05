@@ -31,6 +31,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   void _loadEvents() {
+    const Tag = 'history_screen -> _loadEvents';
     final entries = HiveDb.getAllEntries();
     _events = {};
     
@@ -40,8 +41,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
         // Normalize the date to remove time component
         final normalizedDate = DateTime(date.year, date.month, date.day);
         _events[normalizedDate] = Map<String, dynamic>.from(value);
+        debugPrint('[$Tag] Data loaded for date: $normalizedDate');
+
       } catch (e) {
-        debugPrint('Error parsing date: $e');
+        debugPrint('[$Tag] Error parsing date: $e');
       }
     });
   }
@@ -271,6 +274,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ListTile(
                       title: const Text('Clock In Time'),
                       subtitle: Text(currentClockIn != null ? DateFormat('HH:mm').format(currentClockIn!) : 'Not set'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (currentClockIn != null)
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () {
+                                setState(() {
+                                  currentClockIn = null;
+                                });
+                              },
+                            ),
+                          const Icon(Icons.access_time),
+                        ],
+                      ),
                       onTap: () async {
                         final time = await showTimePicker(
                           context: context,
@@ -292,6 +310,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ListTile(
                       title: const Text('Clock Out Time'),
                       subtitle: Text(currentClockOut != null ? DateFormat('HH:mm').format(currentClockOut!) : 'Not set'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (currentClockOut != null)
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () {
+                                setState(() {
+                                  currentClockOut = null;
+                                });
+                              },
+                            ),
+                          const Icon(Icons.access_time),
+                        ],
+                      ),
                       onTap: () async {
                         final time = await showTimePicker(
                           context: context,

@@ -101,6 +101,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         label: 'Monthly Salary',
                         value: settings.monthlySalary,
                         onChanged: controller.updateMonthlySalary,
+                        currency: settings.currency,
                       ),
                       const SizedBox(height: 16),
                       HoursTextField(
@@ -133,13 +134,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         onChanged: controller.updateCurrency,
                       ),
                       const SizedBox(height: 16),
-                      PercentageSlider(
+                      PercentageTextField(
                         label: 'Insurance Rate',
                         value: settings.insuranceRate,
                         onChanged: (value) => controller.updateInsuranceRate(value),
                       ),
                       const SizedBox(height: 16),
-                      PercentageSlider(
+                      PercentageTextField(
                         label: 'Overtime Rate',
                         value: settings.overtimeRate,
                         onChanged: (value) => controller.updateOvertimeRate(value),

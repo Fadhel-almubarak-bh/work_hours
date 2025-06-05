@@ -472,6 +472,24 @@ class SettingsController extends ChangeNotifier {
       debugPrint('\n📊 [SUMMARY DEBUG INFO]');
       debugPrint('==========================================');
       
+      // Settings Information
+      debugPrint('\n⚙️ Settings:');
+      debugPrint('----------------------');
+      debugPrint('Monthly Salary: ${settings.monthlySalary}');
+      debugPrint('Daily Target Hours: ${settings.dailyTargetHours}');
+      debugPrint('Currency: ${settings.currency}');
+      debugPrint('Insurance Rate: ${(settings.insuranceRate * 100).toStringAsFixed(1)}%');
+      debugPrint('Overtime Rate: ${(settings.overtimeRate * 100).toStringAsFixed(1)}%');
+      
+      // Work Days Configuration
+      debugPrint('\n📅 Work Days Configuration:');
+      debugPrint('----------------------');
+      final workDays = settings.workDays;
+      final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      for (var i = 0; i < 7; i++) {
+        debugPrint('${days[i]}: ${workDays[i] ? '✓' : '✗'}');
+      }
+      
       // Current Week Stats
       debugPrint('\n📅 Current Week Stats:');
       debugPrint('----------------------');
@@ -500,10 +518,39 @@ class SettingsController extends ChangeNotifier {
       
       // Calculate expected work days for the month
       int expectedWorkDays = 0;
-      for (var day = 1; day <= monthEnd.day; day++) {
-        final date = DateTime(now.year, now.month, day);
-        if (settings.workDays[date.weekday - 1]) {
+      int totalOffDays = 0;
+      int totalNonWorkDays = 0;
+      int totalMinutesWorked = 0;
+      int expectedMinutes = 0;
+      int actualWorkDays = 0;
+      int actualOffDays = 0;
+
+      for (var day = monthStart; day.isBefore(monthEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+        final weekdayIndex = day.weekday - 1;
+        final bool isWorkDay = workDays[weekdayIndex];
+        final entry = HiveDb.getDayEntry(day);
+
+        if (isWorkDay) {
           expectedWorkDays++;
+          expectedMinutes += settings.dailyTargetHours * 60;
+
+          if (entry != null) {
+            if (entry['offDay'] == true) {
+              totalOffDays++;
+              actualOffDays++;
+              totalMinutesWorked += settings.dailyTargetHours * 60;
+            } else if (entry['duration'] != null) {
+              actualWorkDays++;
+              totalMinutesWorked += (entry['duration'] as num).toInt();
+            } else if (entry['in'] != null && entry['out'] == null && day.isAtSameMomentAs(now)) {
+              actualWorkDays++;
+              final clockInTime = DateTime.parse(entry['in']);
+              final currentDuration = now.difference(clockInTime).inMinutes;
+              totalMinutesWorked += currentDuration;
+            }
+          }
+        } else {
+          totalNonWorkDays++;
         }
       }
       
@@ -519,15 +566,18 @@ class SettingsController extends ChangeNotifier {
       debugPrint('Expected Minutes: $monthExpectedMinutes');
       debugPrint('Overtime Minutes: $monthOvertime');
       
-      // Work Days Analysis
-      debugPrint('\n📅 Work Days Analysis:');
+      // Monthly Progress Analysis
+      debugPrint('\n📊 Monthly Progress Analysis:');
       debugPrint('----------------------');
-      final workDays = settings.workDays;
-      final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      for (var i = 0; i < 7; i++) {
-        final dayEntries = entries.where((e) => e.date.weekday == i + 1).length;
-        debugPrint('${days[i]}: ${workDays[i] ? '✓' : '✗'} (Entries: $dayEntries)');
-      }
+      debugPrint('Total Work Days in Month: $expectedWorkDays');
+      debugPrint('Total Off Days: $totalOffDays');
+      debugPrint('Total Non-Work Days: $totalNonWorkDays');
+      debugPrint('Total Minutes Worked: $totalMinutesWorked');
+      debugPrint('Expected Minutes: $expectedMinutes');
+      debugPrint('Progress: ${(totalMinutesWorked / expectedMinutes * 100).toStringAsFixed(1)}%');
+      debugPrint('Work Days Completed: $actualWorkDays');
+      debugPrint('Off Days Taken: $actualOffDays');
+      debugPrint('Total Days Off: ${totalOffDays + totalNonWorkDays}');
       
       // Today's Progress
       debugPrint('\n📅 Today\'s Progress:');
@@ -546,6 +596,27 @@ class SettingsController extends ChangeNotifier {
       debugPrint('Minutes Worked: $todayMinutes');
       debugPrint('Expected Minutes: $todayExpectedMinutes');
       debugPrint('Overtime Minutes: $todayOvertime');
+      
+      // Last Month Stats
+      debugPrint('\n📅 Last Month Stats:');
+      debugPrint('----------------------');
+      final lastMonthStart = DateTime(now.year, now.month - 1, 1);
+      final lastMonthEnd = DateTime(now.year, now.month, 0);
+      final lastMonthEntries = entries.where((e) => 
+        e.date.isAfter(lastMonthStart.subtract(const Duration(days: 1))) && 
+        e.date.isBefore(lastMonthEnd.add(const Duration(days: 1)))
+      ).toList();
+      
+      final lastMonthMinutes = lastMonthEntries.fold<int>(0, (sum, e) => sum + e.duration);
+      final lastMonthExpectedMinutes = HiveDb.getLastMonthExpectedMinutes();
+      final lastMonthOvertime = lastMonthMinutes - lastMonthExpectedMinutes;
+      
+      debugPrint('Last Month Start: $lastMonthStart');
+      debugPrint('Last Month End: $lastMonthEnd');
+      debugPrint('Entries Last Month: ${lastMonthEntries.length}');
+      debugPrint('Minutes Worked: $lastMonthMinutes');
+      debugPrint('Expected Minutes: $lastMonthExpectedMinutes');
+      debugPrint('Overtime Minutes: $lastMonthOvertime');
       
       debugPrint('\n==========================================\n');
       
