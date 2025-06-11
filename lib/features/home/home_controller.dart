@@ -35,12 +35,12 @@ class HomeController extends ChangeNotifier {
     }
   }
 
-  Future<void> clockIn() async {
+  Future<void> clockIn([DateTime? customTime]) async {
     try {
-      final now = DateTime.now();
+      final time = customTime ?? DateTime.now();
       await _repository.saveWorkEntry(WorkEntry(
-        date: now,
-        clockIn: now,
+        date: time,
+        clockIn: time,
         duration: 0,
         isOffDay: false,
       ));

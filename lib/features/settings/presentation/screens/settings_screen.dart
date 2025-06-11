@@ -251,6 +251,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ),
                             ),
                           ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => controller.printWidgetDebugInfo(context),
+                              icon: const Icon(Icons.widgets, color: Colors.white),
+                              label: const Text('Widget Debug'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ],

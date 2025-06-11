@@ -386,4 +386,88 @@ class SettingsController extends ChangeNotifier {
       }
     }
   }
+
+  Future<void> printWidgetDebugInfo(BuildContext context) async {
+    try {
+      final debugInfo = StringBuffer();
+      debugInfo.writeln('=== Home Widget Debug Information ===');
+      
+      // Get today's entry
+      final today = DateTime.now();
+      final entry = await _repository.getDayEntry(today);
+      
+      debugInfo.writeln('\nToday\'s Entry:');
+      if (entry != null) {
+        debugInfo.writeln('Clock In: ${entry['in']}');
+        debugInfo.writeln('Clock Out: ${entry['out']}');
+        debugInfo.writeln('Duration: ${entry['duration']} minutes');
+        debugInfo.writeln('Is Off Day: ${entry['offDay']}');
+        debugInfo.writeln('Description: ${entry['description']}');
+      } else {
+        debugInfo.writeln('No entry found for today');
+      }
+      
+      // Get widget data
+      debugInfo.writeln('\nWidget Data:');
+      final isClockedIn = await _repository.isClockedIn();
+      final currentDuration = await _repository.getCurrentDuration();
+      
+      debugInfo.writeln('Is Clocked In: $isClockedIn');
+      debugInfo.writeln('Current Duration: ${currentDuration.inMinutes} minutes');
+      
+      // Get overtime information
+      final monthlyOvertime = await _repository.getMonthlyOvertime();
+      final lastMonthOvertime = await _repository.getLastMonthOvertime();
+      
+      debugInfo.writeln('\nOvertime Information:');
+      debugInfo.writeln('Current Month Overtime: $monthlyOvertime minutes');
+      debugInfo.writeln('Last Month Overtime: $lastMonthOvertime minutes');
+      
+      // Get work days information
+      final settings = await _repository.getSettings();
+      final workDays = settings?.workDays ?? [true, true, true, true, true, false, false];
+      
+      debugInfo.writeln('\nWork Days Configuration:');
+      final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      for (var i = 0; i < days.length; i++) {
+        debugInfo.writeln('${days[i]}: ${workDays[i] ? 'Work Day' : 'Off Day'}');
+      }
+      
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Widget Debug Information'),
+            content: SingleChildScrollView(
+              child: Text(debugInfo.toString()),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await _repository.updateWidget();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Widget updated')),
+                    );
+                  }
+                },
+                child: const Text('Update Widget'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error printing widget debug info: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error printing widget debug info: $e')),
+        );
+      }
+    }
+  }
 } 

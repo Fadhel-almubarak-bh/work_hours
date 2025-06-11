@@ -5,7 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:syncfusion_flutter_charts/charts.dart' hide CornerStyle;
 import 'package:flutter_animation_progress_bar/flutter_animation_progress_bar.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
-import '../../../../config.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../data/local/hive_db.dart';
 
 

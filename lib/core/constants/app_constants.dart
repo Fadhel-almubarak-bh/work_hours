@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import '../theme/theme_extensions.dart';
 
-import '../../config.dart';
 
 // Notification utility class for app-wide consistent notifications
 class NotificationUtil {

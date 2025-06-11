@@ -1075,5 +1075,114 @@ class HiveDb {
       return [];
     }
   }
+  static Future<void> updateWidgetWithOvertimeInfo() async {
+    try {
+      debugPrint("🔄 [WIDGET_DEBUG] Updating widget with overtime information...");
+      // Get current month info
+      final now = DateTime.now();
+      final firstOfMonth = DateTime(now.year, now.month, 1);
+      final today = DateTime(now.year, now.month, now.day);
+      final currentMonthName = DateFormat('MMMM yyyy').format(firstOfMonth);
+
+      // Get workdays counter
+      final allEntries = getAllEntries();
+      final workDaysSetting = getWorkDays();
+      final dailyTarget = getDailyTargetMinutes();
+
+      // Initialize counters
+      int regularWorkDays = 0;
+      int offDays = 0;
+      int extraWorkDays = 0;
+      int totalWorkedMinutes = 0;
+      int totalExpectedMinutes = 0;
+
+      // Calculate days and minutes
+      for (var day = firstOfMonth;
+      day.isBefore(today.add(const Duration(days: 1)));
+      day = day.add(const Duration(days: 1))) {
+        final dateKey = DateFormat('yyyy-MM-dd').format(day);
+        final entry = allEntries[dateKey];
+        final weekdayIndex = day.weekday - 1; // 0-based index (0 = Monday)
+        final bool isConfiguredWorkDay = workDaysSetting[weekdayIndex];
+
+        // Count expected work time
+        if (isConfiguredWorkDay) {
+          totalExpectedMinutes += dailyTarget;
+        }
+
+        // Count actual work time
+        if (entry != null) {
+          if (entry['offDay'] == true) {
+            offDays++;
+            totalWorkedMinutes += dailyTarget;
+          } else if (entry['duration'] != null) {
+            final duration = (entry['duration'] as num).toInt();
+            totalWorkedMinutes += duration;
+
+            if (isConfiguredWorkDay) {
+              regularWorkDays++;
+            } else {
+              extraWorkDays++;
+            }
+          }
+        }
+      }
+
+      // Calculate overtime
+      final overtimeMinutes = totalWorkedMinutes - totalExpectedMinutes;
+      final isAhead = overtimeMinutes >= 0;
+      debugPrint("🔍 [WIDGET_DEBUG] Calculated total expected minutes: $totalExpectedMinutes");
+      debugPrint("🔍 [WIDGET_DEBUG] Calculated total worked minutes: $totalWorkedMinutes");
+      debugPrint("🔍 [WIDGET_DEBUG] Calculated overtime minutes: $overtimeMinutes");
+
+      // Format strings for the widget
+      final overtimeText = "Overtime: ${_formatDurationForWidgetDb(overtimeMinutes)}";
+      final expectedHours = totalExpectedMinutes ~/ 60;
+      final expectedMinutes = totalExpectedMinutes % 60;
+      final actualHours = totalWorkedMinutes ~/ 60;
+      final actualMinutes = totalWorkedMinutes % 60;
+      final expectedVsActual = "Expected: ${expectedHours}h ${expectedMinutes}m / Actual: ${actualHours}h ${actualMinutes}m";
+      final workDaysText = "Work Days: ${regularWorkDays + extraWorkDays}";
+      final offDaysText = "Off Days: $offDays";
+      final statusMessage = isAhead
+          ? "You are ahead of schedule!"
+          : "You are behind schedule";
+
+      // Save extended data for widget
+      await HomeWidget.saveWidgetData<String>('_currentMonthName', currentMonthName);
+      await HomeWidget.saveWidgetData<String>('_overtimeText', overtimeText);
+      await HomeWidget.saveWidgetData<String>('_expectedVsActual', expectedVsActual);
+      await HomeWidget.saveWidgetData<String>('_workDaysText', workDaysText);
+      await HomeWidget.saveWidgetData<String>('_offDaysText', offDaysText);
+      await HomeWidget.saveWidgetData<String>('_statusMessage', statusMessage);
+      await HomeWidget.saveWidgetData<int>('_overtimeColor', isAhead ? 1 : 0); // 1 = green, 0 = red
+
+      debugPrint("Saving extended widget data:");
+      debugPrint("Month: $currentMonthName");
+      debugPrint("Overtime: $overtimeText");
+      debugPrint("Expected vs Actual: $expectedVsActual");
+      debugPrint("Work Days: $workDaysText");
+      debugPrint("Off Days: $offDaysText");
+      debugPrint("Status Message: $statusMessage");
+      debugPrint("Overtime Color: ${isAhead ? 'green' : 'red'}");
+
+      // Trigger widget update
+      await HomeWidget.updateWidget(
+          name: 'MyHomeWidgetProvider',
+          androidName: 'MyHomeWidgetProvider',
+          iOSName: 'MyHomeWidgetProvider');
+
+      // Get the current widget page, if any
+      final currentWidgetPage = await HomeWidget.getWidgetData<int>('_widgetPage') ?? 0;
+      debugPrint("🔍 [WIDGET_DEBUG] Current widget page before preserving: $currentWidgetPage");
+      // Preserve the current widget page in case it was changed by the user
+      await HomeWidget.saveWidgetData<int>('_widgetPage', currentWidgetPage);
+
+      debugPrint("✅ [WIDGET_DEBUG] Widget updated with overtime information.");
+    } catch (e, stackTrace) {
+      debugPrint('❌ [WIDGET_DEBUG] Error updating widget with overtime info: $e');
+      debugPrint('❌ [WIDGET_DEBUG] Stack trace: $stackTrace');
+    }
+  }
 
 }

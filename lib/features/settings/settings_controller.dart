@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:excel/excel.dart';
+import 'package:intl/intl.dart';
 
 class SettingsController extends ChangeNotifier {
   final WorkHoursRepository _repository;
@@ -637,6 +638,97 @@ class SettingsController extends ChangeNotifier {
             content: Text('Error: $e'),
             backgroundColor: Colors.red,
           ),
+        );
+      }
+    }
+  }
+
+  Future<void> printWidgetDebugInfo(BuildContext context) async {
+    try {
+      final debugInfo = StringBuffer();
+      debugInfo.writeln('=== Home Widget Debug Information ===');
+      
+      // Get today's entry
+      final today = DateTime.now();
+      final entry = await _repository.getDayEntry(today);
+      
+      debugInfo.writeln('\nToday\'s Entry:');
+      if (entry != null) {
+        final clockIn = entry['in'] != null ? DateTime.parse(entry['in'] as String) : null;
+        final clockOut = entry['out'] != null ? DateTime.parse(entry['out'] as String) : null;
+        
+        debugInfo.writeln('Clock In: ${clockIn != null ? DateFormat('HH:mm').format(clockIn) : "--:--"}');
+        debugInfo.writeln('Clock Out: ${clockOut != null ? DateFormat('HH:mm').format(clockOut) : "--:--"}');
+        debugInfo.writeln('Duration: ${entry['duration']} minutes');
+        debugInfo.writeln('Is Off Day: ${entry['offDay']}');
+        debugInfo.writeln('Description: ${entry['description']}');
+      } else {
+        debugInfo.writeln('No entry found for today');
+      }
+      
+      // Get widget data
+      debugInfo.writeln('\nWidget Data:');
+      final isClockedIn = await _repository.isClockedIn();
+      final currentDuration = await _repository.getCurrentDuration();
+      
+      debugInfo.writeln('Is Clocked In: $isClockedIn');
+      debugInfo.writeln('Current Duration: ${currentDuration.inMinutes} minutes');
+      
+      // Get overtime information
+      final monthlyOvertime = await _repository.getMonthlyOvertime();
+      final lastMonthOvertime = await _repository.getLastMonthOvertime();
+      
+      debugInfo.writeln('\nOvertime Information:');
+      debugInfo.writeln('Current Month Overtime: $monthlyOvertime minutes');
+      debugInfo.writeln('Last Month Overtime: $lastMonthOvertime minutes');
+      
+      // Get work days information
+      final settings = await _repository.getSettings();
+      final workDays = settings?.workDays ?? [true, true, true, true, true, false, false];
+      
+      debugInfo.writeln('\nWork Days Configuration:');
+      final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      for (var i = 0; i < days.length; i++) {
+        debugInfo.writeln('${days[i]}: ${workDays[i] ? 'Work Day' : 'Off Day'}');
+      }
+
+      // Print to log
+      debugPrint('\n🔍 [WIDGET_DEBUG] Widget Debug Information:');
+      debugPrint(debugInfo.toString());
+      
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Widget Debug Information'),
+            content: SingleChildScrollView(
+              child: Text(debugInfo.toString()),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await _repository.updateWidget();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Widget updated')),
+                    );
+                  }
+                },
+                child: const Text('Update Widget'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ [WIDGET_DEBUG] Error printing widget debug info: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error printing widget debug info: $e')),
         );
       }
     }

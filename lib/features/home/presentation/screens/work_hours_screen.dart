@@ -571,11 +571,48 @@ class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAli
 
   Future<void> _handleClockIn() async {
     try {
-      await _controller.clockIn();
+      // Get time to use (either current or custom selected)
+      DateTime usedTime;
+      
+      if (selectedDate != null) {
+        // Use the selected date and time
+        usedTime = selectedDate!;
+        debugPrint('🕒 Using custom time for clock in: $usedTime');
+      } else if (isCustomTimeSelected && customTime != null) {
+        // Use custom time with current date
+        final now = DateTime.now();
+        usedTime = DateTime(
+          now.year,
+          now.month,
+          now.day,
+          customTime!.hour,
+          customTime!.minute,
+        );
+        debugPrint('🕒 Using custom time for clock in: $usedTime');
+      } else {
+        // Use current time
+        usedTime = DateTime.now();
+        debugPrint('🕒 Using current time for clock in: $usedTime');
+      }
+
+      await _controller.clockIn(usedTime);
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Clocked in successfully')),
         );
+        
+        // Reset the custom time selection after successful clock in
+        setState(() {
+          selectedDate = null;
+          isCustomTimeSelected = false;
+          customTime = null;
+          
+          // Reset to current time display
+          final now = DateTime.now();
+          currentTimeString = DateFormat('HH:mm:ss').format(now);
+          currentDateString = DateFormat('yyyy-MM-dd').format(now);
+        });
       }
     } catch (e) {
       if (mounted) {

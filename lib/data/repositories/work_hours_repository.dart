@@ -285,4 +285,29 @@ class WorkHoursRepository {
     );
     await saveWorkEntry(entry);
   }
+
+  // Widget-related methods
+  Future<Map<String, dynamic>?> getDayEntry(DateTime date) async {
+    return HiveDb.getDayEntry(date);
+  }
+
+  Future<bool> isClockedIn() async {
+    return HiveDb.isClockedIn();
+  }
+
+  Future<Duration> getCurrentDuration() async {
+    return HiveDb.getCurrentDuration();
+  }
+
+  Future<int> getMonthlyOvertime() async {
+    return HiveDb.getMonthlyOvertime();
+  }
+
+  Future<int> getLastMonthOvertime() async {
+    return HiveDb.getLastMonthOvertime();
+  }
+
+  Future<void> updateWidget() async {
+    await HiveDb.updateWidgetWithOvertimeInfo();
+  }
 }
