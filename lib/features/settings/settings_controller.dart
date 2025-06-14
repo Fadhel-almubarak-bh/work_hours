@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
+import '../../data/models/work_entry.dart';
 
 class SettingsController extends ChangeNotifier {
   final WorkHoursRepository _repository;
@@ -216,24 +217,110 @@ class SettingsController extends ChangeNotifier {
         final file = File(result.files.single.path!);
         final bytes = await file.readAsBytes();
         final excel = Excel.decodeBytes(bytes);
+
+        // Defensive check: no sheets
+        if (excel.sheets.isEmpty) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Excel file has no sheets!')),
+            );
+          }
+          return;
+        }
         final sheet = excel.sheets.values.first;
+        // Defensive check: no rows
+        if (sheet.rows.isEmpty) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Excel sheet is empty!')),
+            );
+          }
+          return;
+        }
 
-        // Skip header row
+        // Read header row and map columns
+        final headerRow = sheet.rows.first.map((cell) => cell?.value?.toString()?.trim() ?? '').toList();
+        int colIndex(String name) => headerRow.indexWhere((h) => h.toLowerCase() == name.toLowerCase());
+
+        final dateIdx = colIndex('Date');
+        final clockInIdx = colIndex('Clock In');
+        final clockOutIdx = colIndex('Clock Out');
+        final durationIdx = colIndex('Duration (min)');
+        final hoursIdx = colIndex('Hours');
+        final overtimeIdx = colIndex('Overtime');
+        final offDayIdx = colIndex('Off Day');
+        final descIdx = colIndex('Description');
+
         for (var row in sheet.rows.skip(1)) {
-          if (row.length >= 5) {
-            final dateStr = row[0]?.value.toString() ?? '';
-            final clockInStr = row[1]?.value.toString() ?? '';
-            final clockOutStr = row[2]?.value.toString() ?? '';
-            final hoursStr = row[3]?.value.toString() ?? '0';
-            final overtimeStr = row[4]?.value.toString() ?? '0';
+          final dateStr = dateIdx != -1 ? row[dateIdx]?.value?.toString() ?? '' : '';
+          final clockInStr = clockInIdx != -1 ? row[clockInIdx]?.value?.toString() ?? '' : '';
+          final clockOutStr = clockOutIdx != -1 ? row[clockOutIdx]?.value?.toString() ?? '' : '';
+          final durationStr = durationIdx != -1 ? row[durationIdx]?.value?.toString() ?? '' : '';
+          final hoursStr = hoursIdx != -1 ? row[hoursIdx]?.value?.toString() ?? '' : '';
+          final overtimeStr = overtimeIdx != -1 ? row[overtimeIdx]?.value?.toString() ?? '' : '';
+          final offDayStr = offDayIdx != -1 ? row[offDayIdx]?.value?.toString() ?? '' : '';
+          final description = descIdx != -1 ? row[descIdx]?.value?.toString() ?? '' : '';
 
-            if (dateStr.isNotEmpty && clockInStr.isNotEmpty) {
-              final date = DateTime.parse(dateStr);
-              final clockIn = DateTime.parse(clockInStr);
-              final clockOut = clockOutStr.isNotEmpty ? DateTime.parse(clockOutStr) : null;
-              final hours = double.parse(hoursStr);
-              final overtime = double.parse(overtimeStr);
+          if (dateStr.isEmpty) continue; // Always require a date
 
+          // Determine if this is an off day
+          bool isOffDay = false;
+          if (offDayStr.isNotEmpty) {
+            isOffDay = offDayStr.toLowerCase() == 'yes' || offDayStr.toLowerCase() == 'true';
+          }
+
+          try {
+            final date = DateTime.parse(dateStr);
+            final clockIn = clockInStr.isNotEmpty ? DateTime.parse(clockInStr) : null;
+            final clockOut = clockOutStr.isNotEmpty ? DateTime.parse(clockOutStr) : null;
+
+            // Prefer hours, else use duration (min)
+            double hours = 0;
+            if (hoursStr.isNotEmpty) {
+              hours = double.tryParse(hoursStr) ?? 0;
+            } else if (durationStr.isNotEmpty) {
+              hours = (double.tryParse(durationStr) ?? 0) / 60.0;
+            }
+
+            // Overtime if available
+            double overtime = 0;
+            if (overtimeStr.isNotEmpty) {
+              overtime = double.tryParse(overtimeStr) ?? 0;
+            }
+
+            if (isOffDay) {
+              // Use durationStr or default 480 minutes for off day
+              int durationMinutes = 480;
+              if (durationStr.isNotEmpty) {
+                durationMinutes = int.tryParse(durationStr) ?? 480;
+              } else if (hours > 0) {
+                durationMinutes = (hours * 60).round();
+              }
+              await _repository.saveWorkEntry(
+                WorkEntry(
+                  date: date,
+                  clockIn: null,
+                  clockOut: null,
+                  duration: durationMinutes,
+                  isOffDay: true,
+                  description: description.isNotEmpty ? description : null,
+                ),
+              );
+            } else if (clockIn != null && clockOut != null) {
+              // Calculate duration from times
+              final durationMinutes = clockOut.difference(clockIn).inMinutes;
+              await _repository.saveWorkEntry(
+                WorkEntry(
+                  date: date,
+                  clockIn: clockIn,
+                  clockOut: clockOut,
+                  duration: durationMinutes,
+                  isOffDay: false,
+                  description: description.isNotEmpty ? description : null,
+                ),
+              );
+            } else if (clockIn != null) {
+              // Fallback to hours/duration column
               await _repository.addWorkEntry(
                 date: date,
                 clockIn: clockIn,
@@ -241,7 +328,23 @@ class SettingsController extends ChangeNotifier {
                 hours: hours,
                 overtime: overtime,
               );
+              // Optionally set description if available
+              if (description.isNotEmpty) {
+                await _repository.saveWorkEntry(
+                  WorkEntry(
+                    date: date,
+                    clockIn: clockIn,
+                    clockOut: clockOut,
+                    duration: ((hours + overtime) * 60).round(),
+                    isOffDay: false,
+                    description: description,
+                  ),
+                );
+              }
             }
+          } catch (e) {
+            debugPrint('Error parsing row: $e');
+            continue;
           }
         }
 
