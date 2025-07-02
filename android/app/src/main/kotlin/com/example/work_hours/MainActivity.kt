@@ -25,13 +25,14 @@ class MainActivity : FlutterActivity() {
     private val EVENT_CHANNEL_WIDGET = "widget_events"
     private val CHANNEL_SYSTEM_INFO = "work_hours/system_info"
     
-    // Widget related constants from Java implementation
+    // Widget related constants
     private val WIDGET_CHANNEL = "com.example.work_hours/widget"
     private val WIDGET_ACTIONS_CHANNEL = "com.example.work_hours/actions"
     private val PREFS_NAME = "HomeWidgetPreferences"
     private val KEY_SETTINGS_MODE = "widget_settings_mode"
 
     private var widgetEventSink: EventChannel.EventSink? = null
+    private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -72,6 +73,38 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+        // Widget channel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WIDGET_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "exitSettingsMode" -> {
+                        exitWidgetSettingsMode()
+                        result.success(null)
+                    }
+                    "getWidgetInfo" -> {
+                        result.success(getWidgetInfo())
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // Widget actions channel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WIDGET_ACTIONS_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "clockIn" -> {
+                        // Handle clock in action
+                        result.success(null)
+                    }
+                    "clockOut" -> {
+                        // Handle clock out action
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // Widget events channel
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL_WIDGET)
             .setStreamHandler(object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -82,84 +115,39 @@ class MainActivity : FlutterActivity() {
                     widgetEventSink = null
                 }
             })
-            
-        // Widget functionality from Java implementation
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WIDGET_CHANNEL)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "exitSettingsMode" -> {
-                        exitWidgetSettingsMode()
-                        result.success(true)
-                    }
-                    "getWidgetInfo" -> {
-                        try {
-                            result.success(getWidgetInfo())
-                        } catch (e: Exception) {
-                            result.error("ERROR", "Error getting widget info", e.message)
-                        }
-                    }
-                    else -> {
-                        result.notImplemented()
-                    }
-                }
-            }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        handleIntent(intent)
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        handleIntent(intent)
-    }
-
-    private fun handleIntent(intent: Intent) {
-        if (intent.action == null) {
-            return
-        }
         
-        Log.d(TAG, "Handling intent with action: ${intent.action}")
-        
-        when (intent.action) {
-            "CLOCK_IN" -> {
-                Log.d(TAG, "Received CLOCK_IN action")
-                // Send event to Flutter via event channel
-                widgetEventSink?.success("clock_in")
-                
-                // Alternative approach using method channel
-                try {
-                    MethodChannel(flutterEngine!!.dartExecutor.binaryMessenger, WIDGET_ACTIONS_CHANNEL)
-                        .invokeMethod("clockIn", null)
-                    Log.d(TAG, "Successfully sent CLOCK_IN action to Flutter")
-                    
-                    // Show a toast notification
-                    Toast.makeText(this, "Clocking in...", Toast.LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error sending CLOCK_IN to Flutter: ${e.message}", e)
-                }
+        // Handle widget configuration
+        if (intent?.action == AppWidgetManager.ACTION_APPWIDGET_CONFIGURE) {
+            appWidgetId = intent.getIntExtra(
+                AppWidgetManager.EXTRA_APPWIDGET_ID,
+                AppWidgetManager.INVALID_APPWIDGET_ID
+            )
+            
+            if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+                finish()
+                return
             }
-            "CLOCK_OUT" -> {
-                Log.d(TAG, "Received CLOCK_OUT action")
-                // Send event to Flutter via event channel
-                widgetEventSink?.success("clock_out")
-                
-                // Alternative approach using method channel
-                try {
-                    MethodChannel(flutterEngine!!.dartExecutor.binaryMessenger, WIDGET_ACTIONS_CHANNEL)
-                        .invokeMethod("clockOut", null)
-                    Log.d(TAG, "Successfully sent CLOCK_OUT action to Flutter")
-                    
-                    // Show a toast notification
-                    Toast.makeText(this, "Clocking out...", Toast.LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error sending CLOCK_OUT to Flutter: ${e.message}", e)
-                }
+            
+            // Set the result to OK
+            val resultValue = Intent().apply {
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
             }
+            setResult(RESULT_OK, resultValue)
         }
     }
-    
+
+    override fun onResume() {
+        super.onResume()
+        // If we're in widget configuration mode, finish the activity
+        if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+            finish()
+        }
+    }
+
     // Widget functions from Java implementation
     private fun exitWidgetSettingsMode() {
         try {
