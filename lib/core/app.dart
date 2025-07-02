@@ -17,6 +17,8 @@ import '../services/notification_service.dart';
 import '../services/widget_service.dart';
 import '../services/windows_tray_service.dart';
 import 'theme/theme.dart';
+import '../data/local/hive_db.dart';
+import 'package:path_provider/path_provider.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -30,8 +32,11 @@ class App extends StatelessWidget {
     // Initialize timezone data
     tz.initializeTimeZones();
     
-    // Initialize Hive
-    await Hive.initFlutter();
+    // Initialize Hive with the same path as background callback
+    final dir = await getApplicationDocumentsDirectory();
+    final hivePath = '${dir.path}/hive';
+    Hive.init(hivePath);
+    debugPrint('[main_app] Initializing Hive at: $hivePath');
     
     // Register Hive adapters
     if (!Hive.isAdapterRegistered(1)) {
@@ -57,6 +62,8 @@ class App extends StatelessWidget {
       await WindowsTrayService.initialize();
     } else if (Platform.isAndroid || Platform.isIOS) {
       await WidgetService.initialize();
+      // Test widget functionality
+      await WidgetService.testWidgetFunctionality();
     }
     
     _isInitialized = true;
@@ -139,35 +146,105 @@ Future<void> debugWidgetState() async {
   }
 }
 
-// Renamed callback for clarity with interactivity
+// Widget callback for background actions
 @pragma('vm:entry-point')
 Future<void> interactiveCallback(Uri? uri) async {
   if (uri == null) return;
 
-  debugPrint('🔍 [WIDGET_DEBUG] Interactive callback received URI: $uri');
+  debugPrint('[home_widget] Interactive callback received URI: $uri');
 
-  // Handle widget actions based on the URI host
-  if (uri.host == 'clock_in') {
-    try {
-      // Ensure Hive is initialized if coming from background
-      debugPrint('🔍 [WIDGET_DEBUG] Initializing Hive for clock_in widget action');
-      await Hive.initFlutter();
+  try {
+    // Set Hive directory for background isolate - use the same as main app
+    final dir = await getApplicationDocumentsDirectory();
+    final hivePath = '${dir.path}/hive';
+    Hive.init(hivePath);
+
+    debugPrint('[home_widget] Initializing Hive for widget action at: $hivePath');
+    
+    // Ensure we're using the same box instance as the main app
+    if (!Hive.isBoxOpen('work_entries')) {
       await Hive.openBox('work_entries');
-      await Hive.openBox('settings');
-      debugPrint('✅ [WIDGET_DEBUG] Clocked in via widget callback');
-    } catch (e) {
-      debugPrint('❌ [WIDGET_DEBUG] Error clocking in via widget callback: $e');
     }
-  } else if (uri.host == 'clock_out') {
-    try {
-      // Ensure Hive is initialized
-      debugPrint('🔍 [WIDGET_DEBUG] Initializing Hive for clock_out widget action');
-      await Hive.initFlutter();
-      await Hive.openBox('work_entries');
+    if (!Hive.isBoxOpen('settings')) {
       await Hive.openBox('settings');
-      debugPrint('✅ [WIDGET_DEBUG] Clocked out via widget callback');
-    } catch (e) {
-      debugPrint('❌ [WIDGET_DEBUG] Error clocking out via widget callback: $e');
     }
+    
+    // Handle widget actions based on the URI host
+    if (uri.host == 'clock_in_out') {
+      debugPrint('[home_widget] Processing clock in/out action via background callback');
+      
+      // Check current status
+      final isClockedIn = HiveDb.isClockedIn();
+      debugPrint('[home_widget] Current status - isClockedIn: $isClockedIn');
+      
+      if (isClockedIn) {
+        // Clock out
+        debugPrint('[home_widget] Attempting to clock out');
+        await HiveDb.clockOut(DateTime.now());
+        debugPrint('[home_widget] ✅ Successfully clocked out via widget background callback');
+      } else {
+        // Clock in
+        debugPrint('[home_widget] Attempting to clock in');
+        await HiveDb.clockIn(DateTime.now());
+        debugPrint('[home_widget] ✅ Successfully clocked in via widget background callback');
+        
+        // Debug: Check if data was actually saved
+        final savedData = HiveDb.getDayEntry(DateTime.now());
+        debugPrint('[home_widget] 🔍 Debug: Saved data check - $savedData');
+        if (savedData != null) {
+          debugPrint('[home_widget] 🔍 Debug: Clock in time - ${savedData['in']}');
+          debugPrint('[home_widget] 🔍 Debug: Clock out time - ${savedData['out']}');
+        } else {
+          debugPrint('[home_widget] ❌ Debug: No data found after clock in!');
+        }
+        
+        // Debug: Print all entries to see what's in the database
+        debugPrint('[home_widget] 🔍 Debug: All entries in database:');
+        HiveDb.printAllWorkHourEntries();
+      }
+      
+      // Update widget display
+      await _updateWidgetDisplay();
+      
+    } else {
+      debugPrint('[home_widget] ⚠️ Unknown widget action: ${uri.host}');
+    }
+    
+  } catch (e) {
+    debugPrint('[home_widget] ❌ Error processing widget action: $e');
+  }
+}
+
+// Helper function to update widget display
+Future<void> _updateWidgetDisplay() async {
+  try {
+    debugPrint('[home_widget] Updating widget display');
+    
+    // Get current status
+    final isClockedIn = HiveDb.isClockedIn();
+    final currentDuration = HiveDb.getCurrentDuration();
+    
+    // Format duration
+    final hours = currentDuration.inHours;
+    final minutes = currentDuration.inMinutes.remainder(60);
+    final seconds = currentDuration.inSeconds.remainder(60);
+    final durationText = '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    
+    // Update widget data
+    await HomeWidget.saveWidgetData('_isClockedIn', isClockedIn);
+    await HomeWidget.saveWidgetData('_durationText', durationText);
+    await HomeWidget.saveWidgetData('_lastUpdate', DateTime.now().toIso8601String());
+    
+    // Update widget UI with correct provider name
+    await HomeWidget.updateWidget(
+      androidName: 'MyHomeWidgetProvider',
+      iOSName: 'MyHomeWidgetProvider',
+    );
+    
+    debugPrint('[home_widget] ✅ Widget UI updated with new clock times');
+    
+    debugPrint('[home_widget] ✅ Widget display updated successfully');
+  } catch (e) {
+    debugPrint('[home_widget] ❌ Error updating widget display: $e');
   }
 } 

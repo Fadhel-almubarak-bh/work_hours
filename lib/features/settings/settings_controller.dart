@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
 import '../../data/models/work_entry.dart';
+import '../../services/widget_service.dart';
 
 class SettingsController extends ChangeNotifier {
   final WorkHoursRepository _repository;
@@ -822,6 +823,25 @@ class SettingsController extends ChangeNotifier {
                   }
                 },
                 child: const Text('Update Widget'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  try {
+                    await WidgetService.testClockInOut();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Clock in/out test completed')),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Test failed: $e')),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Test Clock In/Out'),
               ),
             ],
           ),

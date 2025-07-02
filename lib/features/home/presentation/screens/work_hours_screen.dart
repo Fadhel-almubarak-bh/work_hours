@@ -9,6 +9,7 @@ import '../../home_controller.dart';
 import '../../../../core/theme/theme.dart';
 import '../../../../data/local/hive_db.dart';
 import 'package:hive/hive.dart';
+import 'package:flutter/services.dart';
 
 class WorkHoursScreen extends StatefulWidget {
   const WorkHoursScreen({super.key});
@@ -17,7 +18,8 @@ class WorkHoursScreen extends StatefulWidget {
   State<WorkHoursScreen> createState() => _WorkHoursScreenState();
 }
 
-class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAliveClientMixin {
+class _WorkHoursScreenState extends State<WorkHoursScreen>
+    with AutomaticKeepAliveClientMixin {
   DateTime? clockInTime;
   DateTime? clockOutTime;
   DateTime? selectedDate;
@@ -25,7 +27,7 @@ class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAli
   String currentDateString = '';
   late Timer _clockTimer;
   late HomeController _controller;
-  
+
   // Add time editing variables
   bool _isEditingTime = false;
   int _editHour = DateTime.now().hour;
@@ -48,6 +50,19 @@ class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAli
       _updateTime();
     });
     _getTodayStatus();
+
+    // Add lifecycle listener to refresh data when app comes to foreground
+    SystemChannels.lifecycle.setMessageHandler((msg) async {
+      if (msg == AppLifecycleState.resumed.toString()) {
+        debugPrint('[home_screen] 🔄 App resumed, refreshing data');
+        
+        // Force refresh the Hive box to get fresh data
+        await HiveDb.refreshHiveBox();
+        
+        _getTodayStatus();
+      }
+      return null;
+    });
   }
 
   @override
@@ -60,7 +75,7 @@ class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAli
     if (mounted) {
       setState(() {
         final now = DateTime.now();
-        
+
         // Only update to current time if we're not using a custom time
         if (!isCustomTimeSelected) {
           currentTimeString = DateFormat('HH:mm:ss').format(now);
@@ -72,15 +87,20 @@ class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAli
 
   void _getTodayStatus() {
     if (!mounted) return;
-    
+
     final data = HiveDb.getDayEntry(DateTime.now());
+    debugPrint('[home_screen] 🔍 Debug: Reading today status - $data');
 
     if (data != null) {
       final clockInStr = data['in'];
       final clockOutStr = data['out'];
+      debugPrint('[home_screen] 🔍 Debug: Clock in string - $clockInStr');
+      debugPrint('[home_screen] 🔍 Debug: Clock out string - $clockOutStr');
 
-      final parsedClockIn = clockInStr != null ? DateTime.tryParse(clockInStr) : null;
-      final parsedClockOut = clockOutStr != null ? DateTime.tryParse(clockOutStr) : null;
+      final parsedClockIn =
+          clockInStr != null ? DateTime.tryParse(clockInStr) : null;
+      final parsedClockOut =
+          clockOutStr != null ? DateTime.tryParse(clockOutStr) : null;
 
       if (mounted) {
         setState(() {
@@ -92,12 +112,33 @@ class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAli
             clockOutTime = parsedClockOut;
           }
         });
+        debugPrint(
+            '[home_screen] 🔍 Debug: Set clockInTime to $clockInTime, clockOutTime to $clockOutTime');
       }
     } else if (mounted) {
       setState(() {
         clockInTime = null;
         clockOutTime = null;
       });
+      debugPrint(
+          '[home_screen] 🔍 Debug: No data found, set both times to null');
+    }
+  }
+
+  // Method to manually refresh data (can be called from parent or when needed)
+  void refreshData() {
+    debugPrint('[home_screen] 🔄 Manual refresh requested');
+    _getTodayStatus();
+  }
+
+  // Method to update widget display
+  Future<void> updateWidgetDisplay() async {
+    try {
+      debugPrint('[home_screen] 🔄 Updating widget display');
+      await HiveDb.syncTodayEntry();
+      debugPrint('[home_screen] ✅ Widget display updated');
+    } catch (e) {
+      debugPrint('[home_screen] ❌ Error updating widget display: $e');
     }
   }
 
@@ -108,178 +149,190 @@ class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAli
         final now = TimeOfDay.now();
         int hour = now.hour;
         int minute = now.minute;
-        
-        return StatefulBuilder(
-          builder: (context, setState) {
-            final screenWidth = MediaQuery.of(context).size.width;
-            final isSmallScreen = screenWidth < 360;
-            
-            return Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16.0),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+
+        return StatefulBuilder(builder: (context, setState) {
+          final screenWidth = MediaQuery.of(context).size.width;
+          final isSmallScreen = screenWidth < 360;
+
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16.0),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                      Text(
-                        'Select Time',
-                        style: Theme.of(context).textTheme.titleLarge,
+                    Text(
+                      'Select Time',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Time display
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      const SizedBox(height: 16),
-                      
-                      // Time display
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
-                          style: isSmallScreen 
-                            ? Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.onPrimaryContainer,
-                              )
-                            : Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.onPrimaryContainer,
-                              ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      // Hour and minute selectors
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          return Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // Hour selector
-                              Flexible(
-                                child: Column(
-                                  children: [
-                                    const Text('Hour'),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.remove_circle_outline),
-                                          constraints: BoxConstraints.tightFor(
-                                            width: isSmallScreen ? 32 : 40,
-                                            height: isSmallScreen ? 32 : 40
-                                          ),
-                                          padding: EdgeInsets.zero,
-                                          onPressed: () {
-                                            setState(() {
-                                              hour = (hour - 1 + 24) % 24;
-                                            });
-                                          },
-                                        ),
-                                        Text(
-                                          hour.toString().padLeft(2, '0'),
-                                          style: Theme.of(context).textTheme.titleLarge,
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.add_circle_outline),
-                                          constraints: BoxConstraints.tightFor(
-                                            width: isSmallScreen ? 32 : 40,
-                                            height: isSmallScreen ? 32 : 40
-                                          ),
-                                          padding: EdgeInsets.zero,
-                                          onPressed: () {
-                                            setState(() {
-                                              hour = (hour + 1) % 24;
-                                            });
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                      child: Text(
+                        '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
+                        style: isSmallScreen
+                            ? Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onPrimaryContainer,
+                                )
+                            : Theme.of(context)
+                                .textTheme
+                                .headlineMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onPrimaryContainer,
                                 ),
-                              ),
-                              
-                              SizedBox(width: isSmallScreen ? 8 : 16),
-                              
-                              // Minute selector
-                              Flexible(
-                                child: Column(
-                                  children: [
-                                    const Text('Minute'),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.remove_circle_outline),
-                                          constraints: BoxConstraints.tightFor(
-                                            width: isSmallScreen ? 32 : 40,
-                                            height: isSmallScreen ? 32 : 40
-                                          ),
-                                          padding: EdgeInsets.zero,
-                                          onPressed: () {
-                                            setState(() {
-                                              minute = (minute - 1 + 60) % 60;
-                                            });
-                                          },
-                                        ),
-                                        Text(
-                                          minute.toString().padLeft(2, '0'),
-                                          style: Theme.of(context).textTheme.titleLarge,
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.add_circle_outline),
-                                          constraints: BoxConstraints.tightFor(
-                                            width: isSmallScreen ? 32 : 40,
-                                            height: isSmallScreen ? 32 : 40
-                                          ),
-                                          padding: EdgeInsets.zero,
-                                          onPressed: () {
-                                            setState(() {
-                                              minute = (minute + 1) % 60;
-                                            });
-                                          },
-                        ),
-                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          );
-                        }
                       ),
-                      
-                      const SizedBox(height: 16),
-                      
-                      // Buttons
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Hour and minute selectors
+                    LayoutBuilder(builder: (context, constraints) {
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Cancel'),
+                          // Hour selector
+                          Flexible(
+                            child: Column(
+                              children: [
+                                const Text('Hour'),
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(
+                                          Icons.remove_circle_outline),
+                                      constraints: BoxConstraints.tightFor(
+                                          width: isSmallScreen ? 32 : 40,
+                                          height: isSmallScreen ? 32 : 40),
+                                      padding: EdgeInsets.zero,
+                                      onPressed: () {
+                                        setState(() {
+                                          hour = (hour - 1 + 24) % 24;
+                                        });
+                                      },
+                                    ),
+                                    Text(
+                                      hour.toString().padLeft(2, '0'),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge,
+                                    ),
+                                    IconButton(
+                                      icon:
+                                          const Icon(Icons.add_circle_outline),
+                                      constraints: BoxConstraints.tightFor(
+                                          width: isSmallScreen ? 32 : 40,
+                                          height: isSmallScreen ? 32 : 40),
+                                      padding: EdgeInsets.zero,
+                                      onPressed: () {
+                                        setState(() {
+                                          hour = (hour + 1) % 24;
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.pop(context, TimeOfDay(hour: hour, minute: minute));
-                            },
-                            child: const Text('Set Time'),
+
+                          SizedBox(width: isSmallScreen ? 8 : 16),
+
+                          // Minute selector
+                          Flexible(
+                            child: Column(
+                              children: [
+                                const Text('Minute'),
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(
+                                          Icons.remove_circle_outline),
+                                      constraints: BoxConstraints.tightFor(
+                                          width: isSmallScreen ? 32 : 40,
+                                          height: isSmallScreen ? 32 : 40),
+                                      padding: EdgeInsets.zero,
+                                      onPressed: () {
+                                        setState(() {
+                                          minute = (minute - 1 + 60) % 60;
+                                        });
+                                      },
+                                    ),
+                                    Text(
+                                      minute.toString().padLeft(2, '0'),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge,
+                                    ),
+                                    IconButton(
+                                      icon:
+                                          const Icon(Icons.add_circle_outline),
+                                      constraints: BoxConstraints.tightFor(
+                                          width: isSmallScreen ? 32 : 40,
+                                          height: isSmallScreen ? 32 : 40),
+                                      padding: EdgeInsets.zero,
+                                      onPressed: () {
+                                        setState(() {
+                                          minute = (minute + 1) % 60;
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ],
-                      ),
-                    ],
-                  ),
+                      );
+                    }),
+
+                    const SizedBox(height: 16),
+
+                    // Buttons
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(
+                                context, TimeOfDay(hour: hour, minute: minute));
+                          },
+                          child: const Text('Set Time'),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            );
-          }
-        );
+            ),
+          );
+        });
       },
     );
   }
@@ -287,7 +340,7 @@ class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAli
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    
+
     return ValueListenableBuilder(
       valueListenable: HiveDb.getWorkHoursListenable(),
       builder: (context, Box workHours, _) {
@@ -295,273 +348,352 @@ class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAli
         final data = HiveDb.getDayEntry(DateTime.now());
         final clockInStr = data?['in'];
         final clockOutStr = data?['out'];
-        
-        final parsedClockIn = clockInStr != null ? DateTime.tryParse(clockInStr) : null;
-        final parsedClockOut = clockOutStr != null ? DateTime.tryParse(clockOutStr) : null;
+
+        final parsedClockIn =
+            clockInStr != null ? DateTime.tryParse(clockInStr) : null;
+        final parsedClockOut =
+            clockOutStr != null ? DateTime.tryParse(clockOutStr) : null;
 
         return Scaffold(
+          appBar: AppBar(
+            title: const Text('Work Hours'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () async {
+                  debugPrint('[home_screen] 🔄 Manual refresh button pressed');
+                  await HiveDb.refreshHiveBox();
+                  _getTodayStatus();
+                },
+                tooltip: 'Refresh data',
+              ),
+            ],
+          ),
           body: SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-              children: [
-                // Enhanced Time Selection Card
-                Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.access_time, color: Theme.of(context).colorScheme.primary, size: 32),
-                            const SizedBox(width: 16),
-                            Text(
-                              'Time',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        // Current time display - Now updates in real-time with seconds
-                        Center(
-                          child: Column(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                debugPrint('[home_screen] 🔄 Pull-to-refresh triggered');
+                _getTodayStatus();
+              },
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                children: [
+                  // Enhanced Time Selection Card
+                  Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
-                                  borderRadius: BorderRadius.circular(12),
+                              Icon(Icons.access_time,
+                                  color: Theme.of(context).colorScheme.primary,
+                                  size: 32),
+                              const SizedBox(width: 16),
+                              Text(
+                                'Time',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          // Current time display - Now updates in real-time with seconds
+                          Center(
+                            child: Column(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primaryContainer
+                                        .withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          currentTimeString,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .headlineSmall
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary,
+                                              ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        icon: const Icon(Icons.edit, size: 20),
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                        tooltip: 'Select custom time',
+                                        constraints: BoxConstraints.tightFor(
+                                            width: 36, height: 36),
+                                        padding: EdgeInsets.zero,
+                                        onPressed: () async {
+                                          final pickedTime =
+                                              await _showCustomTimePicker(
+                                                  context);
+                                          if (pickedTime != null) {
+                                            setState(() {
+                                              isCustomTimeSelected = true;
+                                              customTime = pickedTime;
+
+                                              // Create a DateTime with the selected time
+                                              final now = DateTime.now();
+                                              final selectedTime = DateTime(
+                                                now.year,
+                                                now.month,
+                                                now.day,
+                                                pickedTime.hour,
+                                                pickedTime.minute,
+                                              );
+
+                                              // Update the displayed time
+                                              currentTimeString =
+                                                  "${DateFormat('HH:mm').format(selectedTime)}:00 (custom)";
+
+                                              // Store for later use
+                                              selectedDate = selectedTime;
+                                            });
+                                          }
+                                        },
+                                      ),
+                                      if (isCustomTimeSelected)
+                                        IconButton(
+                                          icon: const Icon(Icons.restore,
+                                              size: 20),
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary,
+                                          tooltip: 'Reset to current time',
+                                          constraints: BoxConstraints.tightFor(
+                                              width: 36, height: 36),
+                                          padding: EdgeInsets.zero,
+                                          onPressed: () {
+                                            setState(() {
+                                              isCustomTimeSelected = false;
+                                              customTime = null;
+                                              selectedDate = null;
+
+                                              // Reset to current time
+                                              final now = DateTime.now();
+                                              currentTimeString =
+                                                  DateFormat('HH:mm:ss')
+                                                      .format(now);
+                                            });
+                                          },
+                                        ),
+                                    ],
+                                  ),
                                 ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          // Date selection - Only select date, not time
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Date:',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              Flexible(
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Flexible(
-                                      child: Text(
-                                        currentTimeString,
-                                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          color: Theme.of(context).colorScheme.primary,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      icon: const Icon(Icons.edit, size: 20),
-                                      color: Theme.of(context).colorScheme.primary,
-                                      tooltip: 'Select custom time',
-                                      constraints: BoxConstraints.tightFor(width: 36, height: 36),
-                                      padding: EdgeInsets.zero,
-                                      onPressed: () async {
-                                        final pickedTime = await _showCustomTimePicker(context);
-                                        if (pickedTime != null) {
+                                      child: TextButton.icon(
+                                        onPressed: () async {
+                                          final pickedDate =
+                                              await showDatePicker(
+                                            context: context,
+                                            initialDate:
+                                                selectedDate ?? DateTime.now(),
+                                            firstDate: DateTime(2020),
+                                            lastDate: DateTime(2100),
+                                          );
+
+                                          if (pickedDate == null) return;
+
                                           setState(() {
-                                            isCustomTimeSelected = true;
-                                            customTime = pickedTime;
-                                            
-                                            // Create a DateTime with the selected time
-                                            final now = DateTime.now();
-                                            final selectedTime = DateTime(
-                                              now.year, 
-                                              now.month, 
-                                              now.day, 
-                                              pickedTime.hour, 
-                                              pickedTime.minute,
-                                            );
-                                            
-                                            // Update the displayed time
-                                            currentTimeString = "${DateFormat('HH:mm').format(selectedTime)}:00 (custom)";
-                                            
-                                            // Store for later use
-                                            selectedDate = selectedTime;
-                                          });
-                                        }
-                                      },
-                                    ),
-                                    if (isCustomTimeSelected)
-                                      IconButton(
-                                        icon: const Icon(Icons.restore, size: 20),
-                                        color: Theme.of(context).colorScheme.primary,
-                                        tooltip: 'Reset to current time',
-                                        constraints: BoxConstraints.tightFor(width: 36, height: 36),
-                                        padding: EdgeInsets.zero,
-                                        onPressed: () {
-                                          setState(() {
-                                            isCustomTimeSelected = false;
-                                            customTime = null;
-                                            selectedDate = null;
-                                            
-                                            // Reset to current time
-                                            final now = DateTime.now();
-                                            currentTimeString = DateFormat('HH:mm:ss').format(now);
+                                            // If we have a custom time, preserve it with the new date
+                                            if (customTime != null) {
+                                              selectedDate = DateTime(
+                                                pickedDate.year,
+                                                pickedDate.month,
+                                                pickedDate.day,
+                                                customTime!.hour,
+                                                customTime!.minute,
+                                              );
+
+                                              // Update the displayed date and time
+                                              currentDateString =
+                                                  DateFormat('yyyy-MM-dd')
+                                                      .format(selectedDate!);
+                                              currentTimeString =
+                                                  "${DateFormat('HH:mm').format(selectedDate!)}:00 (custom)";
+                                            } else {
+                                              // Just set the date
+                                              selectedDate = pickedDate;
+                                              currentDateString =
+                                                  DateFormat('yyyy-MM-dd')
+                                                      .format(selectedDate!);
+                                            }
                                           });
                                         },
+                                        icon: Icon(Icons.edit,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                            size: 18),
+                                        label: Text(
+                                          selectedDate == null
+                                              ? currentDateString
+                                              : DateFormat('yyyy-MM-dd')
+                                                  .format(selectedDate!),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                    if (selectedDate != null)
+                                      IconButton(
+                                        icon: Icon(Icons.refresh,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                            size: 18),
+                                        tooltip: 'Reset to current date',
+                                        onPressed: () {
+                                          setState(() {
+                                            selectedDate = null;
+                                            isCustomTimeSelected = false;
+                                            customTime = null;
+
+                                            // Reset to current time display
+                                            final now = DateTime.now();
+                                            currentTimeString =
+                                                DateFormat('HH:mm:ss')
+                                                    .format(now);
+                                            currentDateString =
+                                                DateFormat('yyyy-MM-dd')
+                                                    .format(now);
+                                          });
+                                        },
+                                        constraints:
+                                            BoxConstraints.tightFor(width: 30),
+                                        padding: EdgeInsets.zero,
                                       ),
                                   ],
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 20),
-                        // Date selection - Only select date, not time
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Date:',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            Flexible(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Flexible(
-                                    child: TextButton.icon(
-                                      onPressed: () async {
-                                        final pickedDate = await showDatePicker(
-                                          context: context,
-                                          initialDate: selectedDate ?? DateTime.now(),
-                                          firstDate: DateTime(2020),
-                                          lastDate: DateTime(2100),
-                                        );
-                                        
-                                        if (pickedDate == null) return;
-                                        
-                                        setState(() {
-                                          // If we have a custom time, preserve it with the new date
-                                          if (customTime != null) {
-                                            selectedDate = DateTime(
-                                              pickedDate.year,
-                                              pickedDate.month,
-                                              pickedDate.day,
-                                              customTime!.hour,
-                                              customTime!.minute,
-                                            );
-                                            
-                                            // Update the displayed date and time
-                                            currentDateString = DateFormat('yyyy-MM-dd').format(selectedDate!);
-                                            currentTimeString = "${DateFormat('HH:mm').format(selectedDate!)}:00 (custom)";
-                                          } else {
-                                            // Just set the date
-                                            selectedDate = pickedDate;
-                                            currentDateString = DateFormat('yyyy-MM-dd').format(selectedDate!);
-                                          }
-                                        });
-                                      },
-                                      icon: Icon(Icons.edit, color: Theme.of(context).colorScheme.primary, size: 18),
-                                      label: Text(
-                                        selectedDate == null ? currentDateString : DateFormat('yyyy-MM-dd').format(selectedDate!),
-                                        style: Theme.of(context).textTheme.bodyMedium,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ),
-                                  if (selectedDate != null)
-                                    IconButton(
-                                      icon: Icon(Icons.refresh, color: Theme.of(context).colorScheme.primary, size: 18),
-                                      tooltip: 'Reset to current date',
-                                      onPressed: () {
-                                        setState(() {
-                                          selectedDate = null;
-                                          isCustomTimeSelected = false;
-                                          customTime = null;
-                                          
-                                          // Reset to current time display
-                                          final now = DateTime.now();
-                                          currentTimeString = DateFormat('HH:mm:ss').format(now);
-                                          currentDateString = DateFormat('yyyy-MM-dd').format(now);
-                                        });
-                                      },
-                                      constraints: BoxConstraints.tightFor(width: 30),
-                                      padding: EdgeInsets.zero,
-                                    ),
-                                ],
+                          // Reset button
+                          if (selectedDate != null)
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    selectedDate = null;
+                                    isCustomTimeSelected = false;
+                                    customTime = null;
+
+                                    // Reset to current time display
+                                    final now = DateTime.now();
+                                    currentTimeString =
+                                        DateFormat('HH:mm:ss').format(now);
+                                    currentDateString =
+                                        DateFormat('yyyy-MM-dd').format(now);
+                                  });
+                                },
+                                child: const Text('Reset to current date'),
                               ),
                             ),
-                          ],
-                        ),
-                        // Reset button
-                        if (selectedDate != null)
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: () {
-                                setState(() {
-                                  selectedDate = null;
-                                  isCustomTimeSelected = false;
-                                  customTime = null;
-                                  
-                                  // Reset to current time display
-                                  final now = DateTime.now();
-                                  currentTimeString = DateFormat('HH:mm:ss').format(now);
-                                  currentDateString = DateFormat('yyyy-MM-dd').format(now);
-                                });
-                              },
-                              child: const Text('Reset to current date'),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Action Buttons
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: (parsedClockIn == null ||
+                                    (parsedClockIn != null &&
+                                        parsedClockOut != null))
+                                ? _handleClockIn
+                                : null,
+                            icon: const Icon(Icons.login),
+                            label: const Text('Clock In'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.clockIn,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
                             ),
                           ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: (parsedClockIn != null &&
+                                    parsedClockOut == null)
+                                ? _handleClockOut
+                                : null,
+                            icon: const Icon(Icons.logout),
+                            label: const Text('Clock Out'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.clockOut,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                ),
 
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-                // Action Buttons
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: (parsedClockIn == null || (parsedClockIn != null && parsedClockOut != null)) ? _handleClockIn : null,
-                          icon: const Icon(Icons.login),
-                          label: const Text('Clock In'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.clockIn,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
-                        ),
+                  // Off Day Button
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: ElevatedButton.icon(
+                      onPressed: _markOffDay,
+                      icon: const Icon(
+                        Icons.event_busy,
+                        color: Colors.white,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: (parsedClockIn != null && parsedClockOut == null) ? _handleClockOut : null,
-                          icon: const Icon(Icons.logout),
-                          label: const Text('Clock Out'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.clockOut,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
-                        ),
+                      label: const Text('Mark Off Day'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.offDay,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        minimumSize: const Size(double.infinity, 0),
                       ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Off Day Button
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: ElevatedButton.icon(
-                    onPressed: _markOffDay,
-                    icon: const Icon(
-                      Icons.event_busy,
-                      color: Colors.white,
-                    ),
-                    label: const Text('Mark Off Day'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.offDay,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      minimumSize: const Size(double.infinity, 0),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -571,15 +703,14 @@ class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAli
 
   Future<void> _handleClockIn() async {
     try {
+      debugPrint('[clockin] _handleClockIn called');
       // Get time to use (either current or custom selected)
       DateTime usedTime;
-      
+
       if (selectedDate != null) {
-        // Use the selected date and time
         usedTime = selectedDate!;
-        debugPrint('🕒 Using custom time for clock in: $usedTime');
+        debugPrint('[clockin] Using custom time for clock in: $usedTime');
       } else if (isCustomTimeSelected && customTime != null) {
-        // Use custom time with current date
         final now = DateTime.now();
         usedTime = DateTime(
           now.year,
@@ -588,33 +719,30 @@ class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAli
           customTime!.hour,
           customTime!.minute,
         );
-        debugPrint('🕒 Using custom time for clock in: $usedTime');
+        debugPrint('[clockin] Using custom time for clock in: $usedTime');
       } else {
-        // Use current time
         usedTime = DateTime.now();
-        debugPrint('🕒 Using current time for clock in: $usedTime');
+        debugPrint('[clockin] Using current time for clock in: $usedTime');
       }
 
       await _controller.clockIn(usedTime);
-      
+      debugPrint('[clockin] _controller.clockIn completed');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Clocked in successfully')),
         );
-        
-        // Reset the custom time selection after successful clock in
         setState(() {
           selectedDate = null;
           isCustomTimeSelected = false;
           customTime = null;
-          
-          // Reset to current time display
           final now = DateTime.now();
           currentTimeString = DateFormat('HH:mm:ss').format(now);
           currentDateString = DateFormat('yyyy-MM-dd').format(now);
         });
       }
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('[clockin] Error in _handleClockIn: $e\n$stack');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error clocking in: $e')),
@@ -644,7 +772,7 @@ class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAli
     final controller = context.read<HomeController>();
     // Get time to use (either current or custom selected)
     DateTime usedTime;
-    
+
     if (selectedDate != null) {
       // Use the selected date and time
       usedTime = selectedDate!;
@@ -701,7 +829,7 @@ class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAli
         selectedDate = null;
         isCustomTimeSelected = false;
         customTime = null;
-        
+
         // Reset displays to current time
         final now = DateTime.now();
         currentTimeString = DateFormat('HH:mm:ss').format(now);
@@ -710,9 +838,11 @@ class _WorkHoursScreenState extends State<WorkHoursScreen> with AutomaticKeepAli
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$description marked with 8 hours for ${DateFormat('yyyy-MM-dd').format(usedTime)}')),
+          SnackBar(
+              content: Text(
+                  '$description marked with 8 hours for ${DateFormat('yyyy-MM-dd').format(usedTime)}')),
         );
       }
     }
   }
-} 
+}

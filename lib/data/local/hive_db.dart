@@ -27,8 +27,10 @@ class HiveDb {
   static Box? _settingsBox;
 
   static Box get _workHoursBoxInstance {
-    if (_workHoursBox == null) {
-      _workHoursBox = Hive.box('work_hours');
+    if (_workHoursBox == null || !_workHoursBox!.isOpen) {
+      debugPrint('[HiveDb] 🔍 Debug: Opening work_entries box');
+      _workHoursBox = Hive.box('work_entries');
+      debugPrint('[HiveDb] 🔍 Debug: Box opened successfully: ${_workHoursBox!.isOpen}');
     }
     return _workHoursBox!;
   }
@@ -41,27 +43,26 @@ class HiveDb {
   }
 
   static Future<void> initialize() async {
-    _workHoursBox = await Hive.openBox('work_hours');
+    _workHoursBox = await Hive.openBox('work_entries');
     _settingsBox = await Hive.openBox('settings');
   }
 
   // Work Hours Operations
   static Future<void> clockIn(DateTime time) async {
     try {
+      if (!Hive.isBoxOpen('work_entries')) await Hive.openBox('work_entries');
+      final box = Hive.box('work_entries');
       final dateKey = DateFormat('yyyy-MM-dd').format(time);
-      
-      // Check if there's any existing entry for this day
-      final existing = _workHoursBoxInstance.get(dateKey);
+      final existing = box.get(dateKey);
       final String? description = existing?['description'] as String?;
-      
-      await _workHoursBoxInstance.put(dateKey, {
+      await box.put(dateKey, {
         'in': time.toIso8601String(),
         'out': null,
         'duration': null,
         'offDay': false,
-        'description': description, // Preserve any existing description
+        'description': description,
       });
-      await _syncTodayEntry();
+      await syncTodayEntry();
     } catch (e) {
       debugPrint('Error in clockIn: $e');
       rethrow;
@@ -71,7 +72,16 @@ class HiveDb {
   static Map<String, dynamic>? getDayEntry(DateTime date) {
     try {
       final dateKey = DateFormat('yyyy-MM-dd').format(date);
-      final dynamic value = _workHoursBoxInstance.get(dateKey);
+      debugPrint('[HiveDb] 🔍 Debug: Getting entry for date: $dateKey');
+      
+      // Use direct box reference instead of getter
+      final box = Hive.box('work_entries');
+      debugPrint('[HiveDb] 🔍 Debug: Direct box is open: ${box.isOpen}');
+      debugPrint('[HiveDb] 🔍 Debug: Direct box keys: ${box.keys.toList()}');
+      
+      final dynamic value = box.get(dateKey);
+      debugPrint('[HiveDb] 🔍 Debug: Raw value from direct box: $value');
+      
       if (value == null) return null;
       return Map<String, dynamic>.from(value as Map);
     } catch (e) {
@@ -344,22 +354,21 @@ class HiveDb {
 
   static Future<void> clockOut(DateTime time) async {
     try {
+      if (!Hive.isBoxOpen('work_entries')) await Hive.openBox('work_entries');
+      final box = Hive.box('work_entries');
       final dateKey = DateFormat('yyyy-MM-dd').format(time);
-      final entry = _workHoursBoxInstance.get(dateKey);
-      
+      final entry = box.get(dateKey);
       if (entry == null) {
         throw Exception('No clock-in record found for today');
       }
-      
       final clockInTime = DateTime.parse(entry['in'] as String);
       final duration = time.difference(clockInTime).inMinutes;
-      
-      await _workHoursBoxInstance.put(dateKey, {
+      await box.put(dateKey, {
         ...entry,
         'out': time.toIso8601String(),
         'duration': duration,
       });
-      await _syncTodayEntry();
+      await syncTodayEntry();
     } catch (e) {
       debugPrint('Error in clockOut: $e');
       rethrow;
@@ -466,7 +475,7 @@ class HiveDb {
           'description': description ?? entry['description'],
         });
       }
-      await _syncTodayEntry();
+      await syncTodayEntry();
     } catch (e) {
       debugPrint('Error in setOffDay: $e');
       rethrow;
@@ -486,7 +495,7 @@ class HiveDb {
         ...entry,
         'description': description,
       });
-      await _syncTodayEntry();
+      await syncTodayEntry();
     } catch (e) {
       debugPrint('Error in setDescription: $e');
       rethrow;
@@ -495,7 +504,7 @@ class HiveDb {
 
   static Future<void> deleteEntry(DateTime date) async {
     final dateKey = DateFormat('yyyy-MM-dd').format(date);
-    final box = await Hive.openBox('work_hours');
+    final box = await Hive.openBox('work_entries');
     await box.delete(dateKey);
   }
 
@@ -763,15 +772,14 @@ class HiveDb {
   // Clock In/Out Status
   static bool isClockedIn() {
     try {
+      if (!Hive.isBoxOpen('work_entries')) return false;
+      final box = Hive.box('work_entries');
       final today = DateTime.now();
       final dateKey = DateFormat('yyyy-MM-dd').format(today);
-      final entry = _workHoursBoxInstance.get(dateKey);
-      
+      final entry = box.get(dateKey);
       if (entry == null) return false;
-      
       final clockIn = entry['in'] != null;
       final clockOut = entry['out'] != null;
-      
       return clockIn && !clockOut;
     } catch (e) {
       debugPrint('Error in isClockedIn: $e');
@@ -779,25 +787,64 @@ class HiveDb {
     }
   }
 
-  static Duration getCurrentDuration() {
+  static Future<void> syncTodayEntry() async {
     try {
+      if (!Hive.isBoxOpen('work_entries')) await Hive.openBox('work_entries');
+      final box = Hive.box('work_entries');
       final today = DateTime.now();
       final dateKey = DateFormat('yyyy-MM-dd').format(today);
-      final entry = _workHoursBoxInstance.get(dateKey);
+      final entry = box.get(dateKey);
+      
+      if (entry != null) {
+        final clockIn = entry['in'] != null ? DateTime.parse(entry['in'] as String) : null;
+        final clockOut = entry['out'] != null ? DateTime.parse(entry['out'] as String) : null;
+        final duration = entry['duration'] as int?;
+        final offDay = entry['offDay'] as bool? ?? false;
+        
+        await HomeWidget.saveWidgetData('clockIn', clockIn?.toIso8601String());
+        await HomeWidget.saveWidgetData('clockOut', clockOut?.toIso8601String());
+        await HomeWidget.saveWidgetData('duration', duration != null ? _formatDurationForWidgetDb(duration) : null);
+        await HomeWidget.saveWidgetData('offDay', offDay);
+        
+        debugPrint('[HiveDb] 🔄 Synced widget data - Clock In: ${clockIn?.toIso8601String()}, Clock Out: ${clockOut?.toIso8601String()}');
+      } else {
+        await HomeWidget.saveWidgetData('clockIn', null);
+        await HomeWidget.saveWidgetData('clockOut', null);
+        await HomeWidget.saveWidgetData('duration', null);
+        await HomeWidget.saveWidgetData('offDay', false);
+        
+        debugPrint('[HiveDb] 🔄 Synced widget data - No entry found, cleared times');
+      }
+      
+      await HomeWidget.updateWidget(
+        androidName: 'MyHomeWidgetProvider',
+        iOSName: 'MyHomeWidgetProvider',
+      );
+    } catch (e) {
+      debugPrint('Error in syncTodayEntry: $e');
+    }
+  }
+
+  static Duration getCurrentDuration() {
+    try {
+      if (!Hive.isBoxOpen('work_entries')) return Duration.zero;
+      final box = Hive.box('work_entries');
+      final today = DateTime.now();
+      final dateKey = DateFormat('yyyy-MM-dd').format(today);
+      debugPrint('[HiveDb] 🔍 Debug: getCurrentDuration for date: $dateKey');
+      debugPrint('[HiveDb] 🔍 Debug: getCurrentDuration box keys: ${box.keys.toList()}');
+      
+      final entry = box.get(dateKey);
+      debugPrint('[HiveDb] 🔍 Debug: getCurrentDuration entry: $entry');
       
       if (entry == null) return Duration.zero;
-      
       final clockIn = entry['in'] != null ? DateTime.parse(entry['in'] as String) : null;
       final clockOut = entry['out'] != null ? DateTime.parse(entry['out'] as String) : null;
-      
       if (clockIn == null) return Duration.zero;
-      
       if (clockOut != null) {
-        // If clocked out, return the stored duration
         final duration = entry['duration'] as int?;
         return Duration(minutes: duration ?? 0);
       } else {
-        // If still clocked in, calculate current duration
         return DateTime.now().difference(clockIn);
       }
     } catch (e) {
@@ -810,44 +857,6 @@ class HiveDb {
   static int _getDayIndex(String dayName) {
     final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     return days.indexWhere((day) => day.toLowerCase() == dayName.toLowerCase());
-  }
-
-  // Widget Sync
-  static Future<void> _syncTodayEntry() async {
-    try {
-      // Only sync with widget on supported platforms
-      if (!Platform.isAndroid && !Platform.isIOS) {
-        return;
-      }
-
-      final today = DateTime.now();
-      final dateKey = DateFormat('yyyy-MM-dd').format(today);
-      final entry = _workHoursBoxInstance.get(dateKey);
-      
-      if (entry != null) {
-        final clockIn = entry['in'] != null ? DateTime.parse(entry['in'] as String) : null;
-        final clockOut = entry['out'] != null ? DateTime.parse(entry['out'] as String) : null;
-        final duration = entry['duration'] as int?;
-        final offDay = entry['offDay'] as bool? ?? false;
-        
-        await HomeWidget.saveWidgetData('clockIn', clockIn?.toIso8601String());
-        await HomeWidget.saveWidgetData('clockOut', clockOut?.toIso8601String());
-        await HomeWidget.saveWidgetData('duration', duration != null ? _formatDurationForWidgetDb(duration) : null);
-        await HomeWidget.saveWidgetData('offDay', offDay);
-      } else {
-        await HomeWidget.saveWidgetData('clockIn', null);
-        await HomeWidget.saveWidgetData('clockOut', null);
-        await HomeWidget.saveWidgetData('duration', null);
-        await HomeWidget.saveWidgetData('offDay', false);
-      }
-      
-      await HomeWidget.updateWidget(
-        androidName: 'WorkHoursWidget',
-        iOSName: 'WorkHoursWidget',
-      );
-    } catch (e) {
-      debugPrint('Error in _syncTodayEntry: $e');
-    }
   }
 
   static Future<void> markOffDay(DateTime date, {String? description}) async {
@@ -863,7 +872,7 @@ class HiveDb {
         'description': description,
       });
 
-      await _syncTodayEntry();
+      await syncTodayEntry();
       debugPrint('✅ Marked $dateKey as Off Day with description: $description');
     } catch (e) {
       debugPrint('Error in markOffDay: $e');
@@ -872,12 +881,12 @@ class HiveDb {
   }
 
   static Future<void> deleteAllEntries() async {
-    final box = await Hive.openBox('work_hours');
+    final box = await Hive.openBox('work_entries');
     await box.clear();
   }
 
   static List<Map<String, dynamic>> getEntriesForRange(DateTime startDate, DateTime endDate) {
-    final box = Hive.box('work_hours');
+    final box = Hive.box('work_entries');
     final entries = <Map<String, dynamic>>[];
     
     for (var day = startDate; day.isBefore(endDate.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
@@ -896,7 +905,7 @@ class HiveDb {
 
   static Future<void> saveWorkEntry(WorkEntry entry) async {
     final dateKey = DateFormat('yyyy-MM-dd').format(entry.date);
-    final box = await Hive.openBox('work_hours');
+    final box = await Hive.openBox('work_entries');
     
     final data = {
       'in': entry.clockIn?.toIso8601String(),
@@ -907,6 +916,14 @@ class HiveDb {
     };
     
     await box.put(dateKey, data);
+    
+    // Sync with widget if this is today's entry
+    final today = DateTime.now();
+    final todayKey = DateFormat('yyyy-MM-dd').format(today);
+    if (dateKey == todayKey) {
+      await syncTodayEntry();
+      debugPrint('[HiveDb] 🔄 Synced today\'s entry with widget');
+    }
   }
 
   static ValueListenable<Box> getWorkHoursListenable() {
@@ -914,6 +931,21 @@ class HiveDb {
   }
   static ValueListenable<Box> getSettingsListenable() {
     return _settingsBoxInstance.listenable();
+  }
+
+  // Method to force refresh the Hive box
+  static Future<void> refreshHiveBox() async {
+    try {
+      debugPrint('[HiveDb] 🔄 Force refreshing Hive box');
+      if (Hive.isBoxOpen('work_entries')) {
+        await Hive.box('work_entries').close();
+        debugPrint('[HiveDb] 🔄 Closed work_entries box');
+      }
+      await Hive.openBox('work_entries');
+      debugPrint('[HiveDb] 🔄 Reopened work_entries box');
+    } catch (e) {
+      debugPrint('[HiveDb] ❌ Error refreshing box: $e');
+    }
   }
 
   static Future<String> exportDataToExcel(BuildContext context) async {
@@ -1043,7 +1075,7 @@ class HiveDb {
         'offDay': false,
         'description': null,
       });
-      await _syncTodayEntry();
+      await syncTodayEntry();
     } catch (e) {
       debugPrint('Error in addWorkEntry: $e');
       rethrow;

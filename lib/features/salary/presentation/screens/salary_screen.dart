@@ -639,13 +639,16 @@ class _SalaryScreenState extends State<SalaryScreen> {
                   gridData: FlGridData(
                     show: true,
                     drawVerticalLine: false,
-                    horizontalInterval: monthlyHistory.fold<double>(
-                      0,
-                      (max, entry) => math.max(
-                        max,
-                        (entry['salary'] as Map<String, dynamic>)['totalEarnings'] as double,
-                      ),
-                    ) / 5,
+                    horizontalInterval: math.max(
+                      monthlyHistory.fold<double>(
+                        0,
+                        (max, entry) => math.max(
+                          max,
+                          (entry['salary'] as Map<String, dynamic>)['totalEarnings'] as double,
+                        ),
+                      ) / 5,
+                      1.0, // Ensure minimum interval of 1.0
+                    ),
                     getDrawingHorizontalLine: (value) {
                       return FlLine(
                         color: Colors.grey.withOpacity(0.2),

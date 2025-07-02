@@ -38,15 +38,17 @@ class HomeController extends ChangeNotifier {
   Future<void> clockIn([DateTime? customTime]) async {
     try {
       final time = customTime ?? DateTime.now();
+      debugPrint('[clockin] HomeController.clockIn called with time: $time');
       await _repository.saveWorkEntry(WorkEntry(
         date: time,
         clockIn: time,
         duration: 0,
         isOffDay: false,
       ));
+      debugPrint('[clockin] HomeController.clockIn: saveWorkEntry completed');
       notifyListeners();
-    } catch (e) {
-      debugPrint('Error in clockIn: $e');
+    } catch (e, stack) {
+      debugPrint('[clockin] Error in HomeController.clockIn: $e\n$stack');
       rethrow;
     }
   }
