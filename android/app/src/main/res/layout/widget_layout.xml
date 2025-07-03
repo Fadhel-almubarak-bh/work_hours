@@ -124,6 +124,106 @@
                 android:layout_marginTop="8dp"
                 android:clickable="true"
                 android:focusable="true" />
+
+            <!-- Remaining Label/Value -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="8dp">
+                <TextView
+                    android:id="@+id/tv_remaining_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Remaining: "
+                    android:textSize="12sp"
+                    android:textColor="@android:color/darker_gray"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/tv_remaining_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="--h --m"
+                    android:textSize="12sp"
+                    android:textColor="@android:color/darker_gray"
+                    android:layout_marginStart="4dp" />
+            </LinearLayout>
+
+            <!-- Overtime Label/Value -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="4dp">
+                <TextView
+                    android:id="@+id/tv_overtime_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Overtime: "
+                    android:textSize="12sp"
+                    android:textColor="@android:color/darker_gray"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/tv_overtime_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="--h --m"
+                    android:textSize="12sp"
+                    android:textColor="@android:color/darker_gray"
+                    android:layout_marginStart="4dp" />
+            </LinearLayout>
+
+            <!-- Today's Earnings Label/Value -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="8dp">
+                <TextView
+                    android:id="@+id/tv_today_earnings_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Today: "
+                    android:textSize="12sp"
+                    android:textColor="@android:color/darker_gray"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/tv_today_earnings_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="$0.00"
+                    android:textSize="12sp"
+                    android:textColor="@android:color/darker_gray"
+                    android:layout_marginStart="4dp" />
+            </LinearLayout>
+
+            <!-- Monthly Earnings Label/Value -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="4dp">
+                <TextView
+                    android:id="@+id/tv_monthly_earnings_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Month: "
+                    android:textSize="12sp"
+                    android:textColor="@android:color/darker_gray"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/tv_monthly_earnings_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="$0.00"
+                    android:textSize="12sp"
+                    android:textColor="@android:color/darker_gray"
+                    android:layout_marginStart="4dp" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- Settings Content -->

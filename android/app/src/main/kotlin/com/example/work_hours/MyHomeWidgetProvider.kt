@@ -73,6 +73,16 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
                         views.setViewVisibility(R.id.home_screen_content, android.view.View.VISIBLE)
                         showHomeScreenContent(context, views)
                     }
+                    TAB_SUMMARY -> {
+                        // Show summary content
+                        views.setViewVisibility(R.id.home_screen_content, android.view.View.VISIBLE)
+                        showSummaryTabContent(context, views)
+                    }
+                    TAB_SALARY -> {
+                        // Show salary content
+                        views.setViewVisibility(R.id.home_screen_content, android.view.View.VISIBLE)
+                        showSalaryTabContent(context, views)
+                    }
                     else -> {
                         showEmptyTabContent(views)
                     }
@@ -236,6 +246,89 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.tv_clock_in_time, android.view.View.VISIBLE)
         views.setViewVisibility(R.id.tv_clock_out_time, android.view.View.VISIBLE)
         views.setViewVisibility(R.id.btn_clock_in_out, android.view.View.VISIBLE)
+
+        // Hide Remaining and Overtime labels/values for home screen
+        views.setViewVisibility(R.id.tv_remaining_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_remaining_value, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_overtime_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_overtime_value, android.view.View.GONE)
+        
+        // Hide earnings labels/values for home screen
+        views.setViewVisibility(R.id.tv_today_earnings_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_today_earnings_value, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_monthly_earnings_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_monthly_earnings_value, android.view.View.GONE)
+    }
+
+    private fun showSummaryTabContent(context: Context, views: RemoteViews) {
+        // Hide clock in/out time labels and button
+        views.setViewVisibility(R.id.tv_clock_in_time, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_clock_out_time, android.view.View.GONE)
+        views.setViewVisibility(R.id.btn_clock_in_out, android.view.View.GONE)
+
+        // Show Remaining and Overtime labels/values
+        views.setViewVisibility(R.id.tv_remaining_label, android.view.View.VISIBLE)
+        views.setViewVisibility(R.id.tv_remaining_value, android.view.View.VISIBLE)
+        views.setViewVisibility(R.id.tv_overtime_label, android.view.View.VISIBLE)
+        views.setViewVisibility(R.id.tv_overtime_value, android.view.View.VISIBLE)
+
+        // Hide earnings labels/values for summary tab
+        views.setViewVisibility(R.id.tv_today_earnings_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_today_earnings_value, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_monthly_earnings_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_monthly_earnings_value, android.view.View.GONE)
+
+        try {
+            val prefs = HomeWidgetPlugin.getData(context)
+            
+            val remainingText = prefs.getString("_remainingText", "--h --m")
+            val overtimeText = prefs.getString("_overtimeText", "--h --m")
+            
+            Log.d(TAG, "[home_widget] Retrieved remainingText: '$remainingText'")
+            Log.d(TAG, "[home_widget] Retrieved overtimeText: '$overtimeText'")
+            
+            views.setTextViewText(R.id.tv_remaining_value, remainingText)
+            views.setTextViewText(R.id.tv_overtime_value, overtimeText)
+        } catch (e: Exception) {
+            Log.e(TAG, "[home_widget] Error updating summary tab content: ${e.message}", e)
+            views.setTextViewText(R.id.tv_remaining_value, "--h --m")
+            views.setTextViewText(R.id.tv_overtime_value, "--h --m")
+        }
+    }
+    
+    private fun showSalaryTabContent(context: Context, views: RemoteViews) {
+        // Hide clock in/out time labels and button
+        views.setViewVisibility(R.id.tv_clock_in_time, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_clock_out_time, android.view.View.GONE)
+        views.setViewVisibility(R.id.btn_clock_in_out, android.view.View.GONE)
+        
+        // Hide remaining and overtime labels/values
+        views.setViewVisibility(R.id.tv_remaining_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_remaining_value, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_overtime_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_overtime_value, android.view.View.GONE)
+
+        // Show today's earnings and monthly earnings labels/values
+        views.setViewVisibility(R.id.tv_today_earnings_label, android.view.View.VISIBLE)
+        views.setViewVisibility(R.id.tv_today_earnings_value, android.view.View.VISIBLE)
+        views.setViewVisibility(R.id.tv_monthly_earnings_label, android.view.View.VISIBLE)
+        views.setViewVisibility(R.id.tv_monthly_earnings_value, android.view.View.VISIBLE)
+
+        try {
+            val prefs = HomeWidgetPlugin.getData(context)
+            val todayEarnings = prefs.getString("_todayEarnings", "$0.00")
+            val monthlyEarnings = prefs.getString("_monthlyEarnings", "$0.00")
+            
+            Log.d(TAG, "[home_widget] Retrieved todayEarnings: '$todayEarnings'")
+            Log.d(TAG, "[home_widget] Retrieved monthlyEarnings: '$monthlyEarnings'")
+            
+            views.setTextViewText(R.id.tv_today_earnings_value, todayEarnings)
+            views.setTextViewText(R.id.tv_monthly_earnings_value, monthlyEarnings)
+        } catch (e: Exception) {
+            Log.e(TAG, "[home_widget] Error updating salary tab content: ${e.message}", e)
+            views.setTextViewText(R.id.tv_today_earnings_value, "$0.00")
+            views.setTextViewText(R.id.tv_monthly_earnings_value, "$0.00")
+        }
     }
     
     private fun showEmptyTabContent(views: RemoteViews) {
@@ -243,6 +336,18 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.tv_clock_in_time, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_clock_out_time, android.view.View.GONE)
         views.setViewVisibility(R.id.btn_clock_in_out, android.view.View.GONE)
+        
+        // Hide remaining and overtime labels/values
+        views.setViewVisibility(R.id.tv_remaining_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_remaining_value, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_overtime_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_overtime_value, android.view.View.GONE)
+        
+        // Hide earnings labels/values
+        views.setViewVisibility(R.id.tv_today_earnings_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_today_earnings_value, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_monthly_earnings_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_monthly_earnings_value, android.view.View.GONE)
     }
     
     private fun setupNavigationButtons(context: Context, views: RemoteViews, currentTab: Int) {
@@ -426,6 +531,14 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setInt(R.id.tv_page_title, "setTextColor", textColor)
         views.setInt(R.id.tv_clock_in_time, "setTextColor", textColor)
         views.setInt(R.id.tv_clock_out_time, "setTextColor", textColor)
+        views.setInt(R.id.tv_remaining_label, "setTextColor", textColor)
+        views.setInt(R.id.tv_remaining_value, "setTextColor", textColor)
+        views.setInt(R.id.tv_overtime_label, "setTextColor", textColor)
+        views.setInt(R.id.tv_overtime_value, "setTextColor", textColor)
+        views.setInt(R.id.tv_today_earnings_label, "setTextColor", textColor)
+        views.setInt(R.id.tv_today_earnings_value, "setTextColor", textColor)
+        views.setInt(R.id.tv_monthly_earnings_label, "setTextColor", textColor)
+        views.setInt(R.id.tv_monthly_earnings_value, "setTextColor", textColor)
     }
     
     private fun applyWidgetSettings(context: Context) {

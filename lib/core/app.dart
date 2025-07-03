@@ -64,6 +64,8 @@ class App extends StatelessWidget {
       await WidgetService.initialize();
       // Test widget functionality
       await WidgetService.testWidgetFunctionality();
+      // Initialize widget with overtime and remaining data
+      await HiveDb.updateWidgetWithOvertimeInfo();
     }
     
     _isInitialized = true;
@@ -242,6 +244,9 @@ Future<void> _updateWidgetDisplay() async {
     );
     
     debugPrint('[home_widget] ✅ Widget UI updated with new clock times');
+    
+    // Update overtime and remaining information
+    await HiveDb.updateWidgetWithOvertimeInfo();
     
     debugPrint('[home_widget] ✅ Widget display updated successfully');
   } catch (e) {

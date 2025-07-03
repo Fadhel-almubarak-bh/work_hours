@@ -13,6 +13,7 @@ import 'package:file_picker/file_picker.dart'; // If you plan to import from use
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
 import '../models/work_entry.dart'; // Add this import
+import '../repositories/work_hours_repository.dart'; // Add this import
 
 // Helper function (can be moved to a utility file if preferred)
 String _formatDurationForWidgetDb(int totalMinutes) {
@@ -814,6 +815,9 @@ class HiveDb {
         androidName: 'MyHomeWidgetProvider',
         iOSName: 'MyHomeWidgetProvider',
       );
+      
+      // Update overtime and remaining information
+      await updateWidgetWithOvertimeInfo();
     } catch (e) {
       debugPrint('Error in syncTodayEntry: $e');
     }
@@ -1156,6 +1160,10 @@ class HiveDb {
       debugPrint("🔍 [WIDGET_DEBUG] Calculated total worked minutes: $totalWorkedMinutes");
       debugPrint("🔍 [WIDGET_DEBUG] Calculated overtime minutes: $overtimeMinutes");
 
+      // Calculate remaining
+      final remainingMinutes = totalExpectedMinutes - totalWorkedMinutes;
+      final remainingText = "${_formatDurationForWidgetDb(remainingMinutes)}";
+
       // Format strings for the widget
       final overtimeText = "Overtime: ${_formatDurationForWidgetDb(overtimeMinutes)}";
       final expectedHours = totalExpectedMinutes ~/ 60;
@@ -1172,15 +1180,40 @@ class HiveDb {
       // Save extended data for widget
       await HomeWidget.saveWidgetData<String>('_currentMonthName', currentMonthName);
       await HomeWidget.saveWidgetData<String>('_overtimeText', overtimeText);
+      await HomeWidget.saveWidgetData<String>('_remainingText', remainingText);
       await HomeWidget.saveWidgetData<String>('_expectedVsActual', expectedVsActual);
       await HomeWidget.saveWidgetData<String>('_workDaysText', workDaysText);
       await HomeWidget.saveWidgetData<String>('_offDaysText', offDaysText);
       await HomeWidget.saveWidgetData<String>('_statusMessage', statusMessage);
       await HomeWidget.saveWidgetData<int>('_overtimeColor', isAhead ? 1 : 0); // 1 = green, 0 = red
 
+      // Save salary data for widget
+      try {
+        final repository = WorkHoursRepository();
+        final currentSalary = await repository.calculateSalary(DateTime.now());
+        final todayEarnings = currentSalary['todayEarnings'] as double? ?? 0.0;
+        final totalEarnings = currentSalary['totalEarnings'] as double? ?? 0.0;
+        
+        // Format currency values
+        final todayEarningsText = '\$${todayEarnings.toStringAsFixed(2)}';
+        final monthlyEarningsText = '\$${totalEarnings.toStringAsFixed(2)}';
+        
+        await HomeWidget.saveWidgetData<String>('_todayEarnings', todayEarningsText);
+        await HomeWidget.saveWidgetData<String>('_monthlyEarnings', monthlyEarningsText);
+        
+        debugPrint("Saving salary widget data:");
+        debugPrint("Today's Earnings: $todayEarningsText");
+        debugPrint("Monthly Earnings: $monthlyEarningsText");
+      } catch (e) {
+        debugPrint("Error saving salary data to widget: $e");
+        await HomeWidget.saveWidgetData<String>('_todayEarnings', '\$0.00');
+        await HomeWidget.saveWidgetData<String>('_monthlyEarnings', '\$0.00');
+      }
+
       debugPrint("Saving extended widget data:");
       debugPrint("Month: $currentMonthName");
       debugPrint("Overtime: $overtimeText");
+      debugPrint("Remaining: $remainingText");
       debugPrint("Expected vs Actual: $expectedVsActual");
       debugPrint("Work Days: $workDaysText");
       debugPrint("Off Days: $offDaysText");
