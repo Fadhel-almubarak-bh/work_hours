@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.widget.RemoteViews
 import android.widget.Toast
@@ -24,8 +25,11 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         private const val ACTION_PREVIOUS = "com.example.work_hours.ACTION_PREVIOUS"
         private const val ACTION_NEXT = "com.example.work_hours.ACTION_NEXT"
         private const val ACTION_SETTINGS = "com.example.work_hours.ACTION_SETTINGS"
+        private const val ACTION_BACK = "com.example.work_hours.ACTION_BACK"
         private const val ACTION_CLOCK_IN_OUT = "com.example.work_hours.ACTION_CLOCK_IN_OUT"
         private const val ACTION_TEST = "com.example.work_hours.ACTION_TEST"
+        private const val ACTION_TRANSPARENCY_CHANGE = "com.example.work_hours.ACTION_TRANSPARENCY_CHANGE"
+        private const val ACTION_COLOR_CHANGE = "com.example.work_hours.ACTION_COLOR_CHANGE"
         
         // Tab navigation constants
         private const val TAB_HOME_SCREEN = 0
@@ -35,64 +39,48 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         private const val TOTAL_TABS = 4
         
         private val TAB_NAMES = arrayOf("Home Screen", "History", "Summary", "Salary")
+        
+        // Settings constants
+        private const val SETTINGS_PAGE = -1
     }
     
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_layout)
             
+            // Apply widget settings (transparency and background color)
+            applyWidgetSettings(context, views)
+            
             // Get current tab from shared preferences
             val currentTab = getCurrentTab(context)
             
-            // Update page title
-            updatePageTitle(views, currentTab)
-            
-            // Show different content based on current tab
-            when (currentTab) {
-                TAB_HOME_SCREEN -> {
-                    // Show clock in/out functionality for home screen
-                    showHomeScreenContent(context, views)
-                }
-                else -> {
-                    // Show only title for other tabs (History, Summary, Salary)
-                    showEmptyTabContent(views)
-                }
-            }
-
-            // Intent for previous button
-            val prevIntent = Intent(context, MyHomeWidgetProvider::class.java).apply {
-                action = ACTION_PREVIOUS
-            }
-            val prevPendingIntent = PendingIntent.getBroadcast(context, 0, prevIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            views.setOnClickPendingIntent(R.id.btn_previous, prevPendingIntent)
-
-            // Intent for next button
-            val nextIntent = Intent(context, MyHomeWidgetProvider::class.java).apply {
-                action = ACTION_NEXT
-            }
-            val nextPendingIntent = PendingIntent.getBroadcast(context, 1, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            views.setOnClickPendingIntent(R.id.btn_next, nextPendingIntent)
-
-            // Intent for settings button
-            val settingsIntent = Intent(context, MyHomeWidgetProvider::class.java).apply {
-                action = ACTION_SETTINGS
-            }
-            val settingsPendingIntent = PendingIntent.getBroadcast(context, 2, settingsIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            views.setOnClickPendingIntent(R.id.btn_settings, settingsPendingIntent)
-
-            // Intent for clock in/out button - only for home screen
-            if (currentTab == TAB_HOME_SCREEN) {
-                try {
-                    val clockIntent = Intent(context, HomeWidgetBackgroundReceiver::class.java).apply {
-                        action = "HOME_WIDGET_UPDATE"
-                        data = Uri.parse("myapp://clock_in_out")
+            // Check if we're in settings mode
+            if (isInSettingsMode(context)) {
+                // Show only settings page
+                showSettingsPage(context, views)
+                // Hide home screen content
+                views.setViewVisibility(R.id.home_screen_content, android.view.View.GONE)
+            } else {
+                // Always hide settings content when not in settings mode
+                views.setViewVisibility(R.id.settings_content, android.view.View.GONE)
+                // Update page title
+                updatePageTitle(views, currentTab)
+                
+                // Show different content based on current tab
+                when (currentTab) {
+                    TAB_HOME_SCREEN -> {
+                        // Ensure home screen content is visible
+                        views.setViewVisibility(R.id.home_screen_content, android.view.View.VISIBLE)
+                        showHomeScreenContent(context, views)
                     }
-                    val clockPendingIntent = PendingIntent.getBroadcast(context, 100, clockIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                    views.setOnClickPendingIntent(R.id.btn_clock_in_out, clockPendingIntent)
-                } catch (e: Exception) {
-                    Log.e(TAG, "[home_widget] ❌ Error setting up clock in/out button: ${e.message}")
+                    else -> {
+                        showEmptyTabContent(views)
+                    }
                 }
             }
+
+            // Setup navigation buttons
+            setupNavigationButtons(context, views, currentTab)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
@@ -103,26 +91,36 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         
         when (intent.action) {
             ACTION_PREVIOUS -> {
+                if (isInSettingsMode(context)) {
+                    // In settings, previous button does nothing
+                    return
+                }
                 val currentTab = getCurrentTab(context)
                 val newTab = if (currentTab == 0) TOTAL_TABS - 1 else currentTab - 1
                 setCurrentTab(context, newTab)
                 updateAllWidgets(context)
-                Toast.makeText(context, "Previous: ${TAB_NAMES[newTab]}", Toast.LENGTH_SHORT).show()
             }
             ACTION_NEXT -> {
+                if (isInSettingsMode(context)) {
+                    // In settings, next button does nothing
+                    return
+                }
                 val currentTab = getCurrentTab(context)
                 val newTab = (currentTab + 1) % TOTAL_TABS
                 setCurrentTab(context, newTab)
                 updateAllWidgets(context)
-                Toast.makeText(context, "Next: ${TAB_NAMES[newTab]}", Toast.LENGTH_SHORT).show()
             }
             ACTION_SETTINGS -> {
-                Toast.makeText(context, "Settings clicked", Toast.LENGTH_SHORT).show()
+                // Toggle settings mode
+                setSettingsMode(context, !isInSettingsMode(context))
+                updateAllWidgets(context)
             }
             ACTION_CLOCK_IN_OUT -> {
+                if (isInSettingsMode(context)) {
+                    return
+                }
                 Toast.makeText(context, "Clock in/out button pressed!", Toast.LENGTH_SHORT).show()
                 try {
-                    // Forward to MainActivity to handle in Flutter
                     val flutterIntent = Intent(context, MainActivity::class.java)
                     flutterIntent.action = ACTION_CLOCK_IN_OUT
                     flutterIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -132,6 +130,29 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
                     Log.e(TAG, "[home_widget] ❌ Error forwarding clock in/out action: ${e.message}", e)
                     Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
+            }
+            ACTION_TRANSPARENCY_CHANGE -> {
+                val transparency = intent.getIntExtra("transparency", 100)
+                setTransparency(context, transparency)
+                applyWidgetSettings(context)
+                updateAllWidgets(context)
+                
+                // Update the transparency label if in settings mode
+                if (isInSettingsMode(context)) {
+                    val appWidgetManager = AppWidgetManager.getInstance(context)
+                    val appWidgetIds = appWidgetManager.getAppWidgetIds(ComponentName(context, MyHomeWidgetProvider::class.java))
+                    for (appWidgetId in appWidgetIds) {
+                        val views = RemoteViews(context.packageName, R.layout.widget_layout)
+                        views.setTextViewText(R.id.tv_transparency_label, "Transparency: $transparency%")
+                        appWidgetManager.updateAppWidget(appWidgetId, views)
+                    }
+                }
+            }
+            ACTION_COLOR_CHANGE -> {
+                val color = intent.getStringExtra("color") ?: "white"
+                setBackgroundColor(context, color)
+                applyWidgetSettings(context)
+                updateAllWidgets(context)
             }
             ACTION_TEST -> {
                 Toast.makeText(context, "Test button works!", Toast.LENGTH_LONG).show()
@@ -222,5 +243,197 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.tv_clock_in_time, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_clock_out_time, android.view.View.GONE)
         views.setViewVisibility(R.id.btn_clock_in_out, android.view.View.GONE)
+    }
+    
+    private fun setupNavigationButtons(context: Context, views: RemoteViews, currentTab: Int) {
+        if (isInSettingsMode(context)) {
+            // In settings mode, hide prev/next buttons
+            views.setViewVisibility(R.id.btn_previous, android.view.View.GONE)
+            views.setViewVisibility(R.id.btn_next, android.view.View.GONE)
+            // Settings button toggles settings mode, so keep it enabled
+        } else {
+            // Normal mode, show prev/next buttons
+            views.setViewVisibility(R.id.btn_previous, android.view.View.VISIBLE)
+            views.setViewVisibility(R.id.btn_next, android.view.View.VISIBLE)
+            // Settings button toggles settings mode, so keep it enabled
+            // Intent for previous button
+            val prevIntent = Intent(context, MyHomeWidgetProvider::class.java).apply {
+                action = ACTION_PREVIOUS
+            }
+            val prevPendingIntent = PendingIntent.getBroadcast(context, 0, prevIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            views.setOnClickPendingIntent(R.id.btn_previous, prevPendingIntent)
+
+            // Intent for next button
+            val nextIntent = Intent(context, MyHomeWidgetProvider::class.java).apply {
+                action = ACTION_NEXT
+            }
+            val nextPendingIntent = PendingIntent.getBroadcast(context, 1, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            views.setOnClickPendingIntent(R.id.btn_next, nextPendingIntent)
+        }
+        // Settings button always toggles settings mode
+        val settingsIntent = Intent(context, MyHomeWidgetProvider::class.java).apply {
+            action = ACTION_SETTINGS
+        }
+        val settingsPendingIntent = PendingIntent.getBroadcast(context, 2, settingsIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        views.setOnClickPendingIntent(R.id.btn_settings, settingsPendingIntent)
+        // Remove back button logic
+    }
+    
+    private fun isInSettingsMode(context: Context): Boolean {
+        val prefs = context.getSharedPreferences("WidgetPrefs", Context.MODE_PRIVATE)
+        return prefs.getBoolean("settings_mode", false)
+    }
+    
+    private fun setSettingsMode(context: Context, isSettingsMode: Boolean) {
+        val prefs = context.getSharedPreferences("WidgetPrefs", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("settings_mode", isSettingsMode).apply()
+    }
+    
+    private fun setTransparency(context: Context, transparency: Int) {
+        val prefs = context.getSharedPreferences("WidgetPrefs", Context.MODE_PRIVATE)
+        prefs.edit().putInt("transparency", transparency).apply()
+    }
+    
+    private fun setBackgroundColor(context: Context, color: String) {
+        val prefs = context.getSharedPreferences("WidgetPrefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("backgroundColor", color).apply()
+    }
+    
+    private fun showSettingsPage(context: Context, views: RemoteViews) {
+        // Update page title
+        views.setTextViewText(R.id.tv_page_title, "Settings")
+        
+        // Hide home screen content
+        views.setViewVisibility(R.id.home_screen_content, android.view.View.GONE)
+        
+        // Show settings content
+        views.setViewVisibility(R.id.settings_content, android.view.View.VISIBLE)
+        
+        // Get current transparency and background color
+        val prefs = context.getSharedPreferences("WidgetPrefs", Context.MODE_PRIVATE)
+        val transparency = prefs.getInt("transparency", 100)
+        val backgroundColor = prefs.getString("backgroundColor", "white") ?: "white"
+        
+        // Update transparency label to show current value
+        views.setTextViewText(R.id.tv_transparency_label, "Transparency: $transparency%")
+        
+        // Setup transparency and color buttons
+        setupTransparencyButtons(context, views)
+        setupColorButtons(context, views)
+    }
+    
+    private fun setupTransparencyButtons(context: Context, views: RemoteViews) {
+        // 25% transparency button
+        val transparency25Intent = Intent(context, MyHomeWidgetProvider::class.java).apply {
+            action = ACTION_TRANSPARENCY_CHANGE
+            putExtra("transparency", 25)
+        }
+        val transparency25PendingIntent = PendingIntent.getBroadcast(context, 300, transparency25Intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        views.setOnClickPendingIntent(R.id.btn_transparency_25, transparency25PendingIntent)
+        
+        // 50% transparency button
+        val transparency50Intent = Intent(context, MyHomeWidgetProvider::class.java).apply {
+            action = ACTION_TRANSPARENCY_CHANGE
+            putExtra("transparency", 50)
+        }
+        val transparency50PendingIntent = PendingIntent.getBroadcast(context, 301, transparency50Intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        views.setOnClickPendingIntent(R.id.btn_transparency_50, transparency50PendingIntent)
+        
+        // 75% transparency button
+        val transparency75Intent = Intent(context, MyHomeWidgetProvider::class.java).apply {
+            action = ACTION_TRANSPARENCY_CHANGE
+            putExtra("transparency", 75)
+        }
+        val transparency75PendingIntent = PendingIntent.getBroadcast(context, 302, transparency75Intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        views.setOnClickPendingIntent(R.id.btn_transparency_75, transparency75PendingIntent)
+        
+        // 100% transparency button
+        val transparency100Intent = Intent(context, MyHomeWidgetProvider::class.java).apply {
+            action = ACTION_TRANSPARENCY_CHANGE
+            putExtra("transparency", 100)
+        }
+        val transparency100PendingIntent = PendingIntent.getBroadcast(context, 303, transparency100Intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        views.setOnClickPendingIntent(R.id.btn_transparency_100, transparency100PendingIntent)
+    }
+    
+    private fun setupColorButtons(context: Context, views: RemoteViews) {
+        // White color button
+        val whiteIntent = Intent(context, MyHomeWidgetProvider::class.java).apply {
+            action = ACTION_COLOR_CHANGE
+            putExtra("color", "white")
+        }
+        val whitePendingIntent = PendingIntent.getBroadcast(context, 200, whiteIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        views.setOnClickPendingIntent(R.id.btn_color_white, whitePendingIntent)
+        
+        // Black color button
+        val blackIntent = Intent(context, MyHomeWidgetProvider::class.java).apply {
+            action = ACTION_COLOR_CHANGE
+            putExtra("color", "black")
+        }
+        val blackPendingIntent = PendingIntent.getBroadcast(context, 201, blackIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        views.setOnClickPendingIntent(R.id.btn_color_black, blackPendingIntent)
+        
+        // Blue color button
+        val blueIntent = Intent(context, MyHomeWidgetProvider::class.java).apply {
+            action = ACTION_COLOR_CHANGE
+            putExtra("color", "blue")
+        }
+        val bluePendingIntent = PendingIntent.getBroadcast(context, 202, blueIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        views.setOnClickPendingIntent(R.id.btn_color_blue, bluePendingIntent)
+        
+        // Green color button
+        val greenIntent = Intent(context, MyHomeWidgetProvider::class.java).apply {
+            action = ACTION_COLOR_CHANGE
+            putExtra("color", "green")
+        }
+        val greenPendingIntent = PendingIntent.getBroadcast(context, 203, greenIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        views.setOnClickPendingIntent(R.id.btn_color_green, greenPendingIntent)
+    }
+
+    private fun applyWidgetSettings(context: Context, views: RemoteViews) {
+        // Get current background color and transparency
+        val prefs = context.getSharedPreferences("WidgetPrefs", Context.MODE_PRIVATE)
+        val backgroundColor = prefs.getString("backgroundColor", "white") ?: "white"
+        val transparency = prefs.getInt("transparency", 100)
+        
+        // Calculate alpha value (0-255) from transparency percentage
+        val alpha = (transparency * 255 / 100).coerceIn(0, 255)
+        
+        // Apply background color with transparency to the entire widget
+        val baseColor = when (backgroundColor) {
+            "white" -> Color.WHITE
+            "black" -> Color.BLACK
+            "blue" -> Color.parseColor("#2196F3") // Material Blue
+            "green" -> Color.parseColor("#4CAF50") // Material Green
+            else -> Color.WHITE
+        }
+        
+        // Create semi-transparent color by combining alpha with base color
+        val transparentColor = Color.argb(alpha, Color.red(baseColor), Color.green(baseColor), Color.blue(baseColor))
+        
+        // Apply background color to the root container (entire widget)
+        views.setInt(R.id.widget_root_container, "setBackgroundColor", transparentColor)
+        
+        // Adjust text colors based on background for better visibility
+        val textColor = when (backgroundColor) {
+            "black" -> Color.WHITE
+            "blue" -> Color.WHITE
+            "green" -> Color.WHITE
+            else -> Color.BLACK // white background
+        }
+        
+        // Update text colors
+        views.setInt(R.id.tv_page_title, "setTextColor", textColor)
+        views.setInt(R.id.tv_clock_in_time, "setTextColor", textColor)
+        views.setInt(R.id.tv_clock_out_time, "setTextColor", textColor)
+    }
+    
+    private fun applyWidgetSettings(context: Context) {
+        // Trigger widget update to apply new settings
+        val appWidgetManager = AppWidgetManager.getInstance(context)
+        val appWidgetIds = appWidgetManager.getAppWidgetIds(ComponentName(context, MyHomeWidgetProvider::class.java))
+        if (appWidgetIds.isNotEmpty()) {
+            onUpdate(context, appWidgetManager, appWidgetIds)
+        }
     }
 } 
