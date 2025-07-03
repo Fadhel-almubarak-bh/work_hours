@@ -5,6 +5,7 @@ import '../../core/theme/theme_provider.dart';
 import '../../data/local/hive_db.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
@@ -145,56 +146,60 @@ class SettingsController extends ChangeNotifier {
 
   Future<void> exportDataToExcel(BuildContext context) async {
     try {
+      final excel = Excel.createExcel();
+      final sheet = excel.sheets.values.first;
+
+      // Add headers
+      sheet.appendRow([
+        TextCellValue('Date'),
+        TextCellValue('Clock In'),
+        TextCellValue('Clock Out'),
+        TextCellValue('Hours'),
+        TextCellValue('Overtime'),
+      ]);
+
+      // Get work entries from repository
+      final entries = await _repository.getAllWorkEntries();
+      final settings = await _repository.getSettings();
+      
+      for (final entry in entries) {
+        final totalHours = entry.duration / 60.0;
+        final expectedHours = settings?.dailyTargetHours ?? 8.0;
+        final overtime = totalHours > expectedHours ? totalHours - expectedHours : 0.0;
+        final regularHours = totalHours - overtime;
+
+        sheet.appendRow([
+          TextCellValue(entry.date.toString()),
+          TextCellValue(entry.clockIn.toString()),
+          TextCellValue(entry.clockOut?.toString() ?? ''),
+          TextCellValue(regularHours.toStringAsFixed(2)),
+          TextCellValue(overtime.toStringAsFixed(2)),
+        ]);
+      }
+
+      // Encode the Excel file to bytes
+      final bytes = excel.encode();
+      if (bytes == null) {
+        throw Exception('Failed to encode Excel file');
+      }
+
+      // Convert List<int> to Uint8List
+      final uint8List = Uint8List.fromList(bytes);
+
+      // Save the file using FilePicker with bytes
       final result = await FilePicker.platform.saveFile(
         dialogTitle: 'Save Excel File',
         fileName: 'work_hours_export.xlsx',
         type: FileType.custom,
         allowedExtensions: ['xlsx'],
+        bytes: uint8List, // Pass the Uint8List
       );
 
       if (result != null) {
-        final excel = Excel.createExcel();
-        final sheet = excel.sheets.values.first;
-
-        // Add headers
-        sheet.appendRow([
-          TextCellValue('Date'),
-          TextCellValue('Clock In'),
-          TextCellValue('Clock Out'),
-          TextCellValue('Hours'),
-          TextCellValue('Overtime'),
-        ]);
-
-        // Get work entries from repository
-        final entries = await _repository.getAllWorkEntries();
-        final settings = await _repository.getSettings();
-        
-        for (final entry in entries) {
-          final totalHours = entry.duration / 60.0;
-          final expectedHours = settings?.dailyTargetHours ?? 8.0;
-          final overtime = totalHours > expectedHours ? totalHours - expectedHours : 0.0;
-          final regularHours = totalHours - overtime;
-
-          sheet.appendRow([
-            TextCellValue(entry.date.toString()),
-            TextCellValue(entry.clockIn.toString()),
-            TextCellValue(entry.clockOut?.toString() ?? ''),
-            TextCellValue(regularHours.toStringAsFixed(2)),
-            TextCellValue(overtime.toStringAsFixed(2)),
-          ]);
-        }
-
-        // Save the file
-        final bytes = excel.encode();
-        if (bytes != null) {
-          final file = File(result);
-          await file.writeAsBytes(bytes);
-          
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Data exported successfully')),
-            );
-          }
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Data exported successfully')),
+          );
         }
       }
     } catch (e) {

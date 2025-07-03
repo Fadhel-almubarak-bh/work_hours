@@ -28,9 +28,7 @@ class HiveDb {
 
   static Box get _workHoursBoxInstance {
     if (_workHoursBox == null || !_workHoursBox!.isOpen) {
-      debugPrint('[HiveDb] 🔍 Debug: Opening work_entries box');
       _workHoursBox = Hive.box('work_entries');
-      debugPrint('[HiveDb] 🔍 Debug: Box opened successfully: ${_workHoursBox!.isOpen}');
     }
     return _workHoursBox!;
   }
@@ -72,15 +70,11 @@ class HiveDb {
   static Map<String, dynamic>? getDayEntry(DateTime date) {
     try {
       final dateKey = DateFormat('yyyy-MM-dd').format(date);
-      debugPrint('[HiveDb] 🔍 Debug: Getting entry for date: $dateKey');
       
       // Use direct box reference instead of getter
       final box = Hive.box('work_entries');
-      debugPrint('[HiveDb] 🔍 Debug: Direct box is open: ${box.isOpen}');
-      debugPrint('[HiveDb] 🔍 Debug: Direct box keys: ${box.keys.toList()}');
       
       final dynamic value = box.get(dateKey);
-      debugPrint('[HiveDb] 🔍 Debug: Raw value from direct box: $value');
       
       if (value == null) return null;
       return Map<String, dynamic>.from(value as Map);
@@ -831,11 +825,8 @@ class HiveDb {
       final box = Hive.box('work_entries');
       final today = DateTime.now();
       final dateKey = DateFormat('yyyy-MM-dd').format(today);
-      debugPrint('[HiveDb] 🔍 Debug: getCurrentDuration for date: $dateKey');
-      debugPrint('[HiveDb] 🔍 Debug: getCurrentDuration box keys: ${box.keys.toList()}');
       
       final entry = box.get(dateKey);
-      debugPrint('[HiveDb] 🔍 Debug: getCurrentDuration entry: $entry');
       
       if (entry == null) return Duration.zero;
       final clockIn = entry['in'] != null ? DateTime.parse(entry['in'] as String) : null;
@@ -922,7 +913,6 @@ class HiveDb {
     final todayKey = DateFormat('yyyy-MM-dd').format(today);
     if (dateKey == todayKey) {
       await syncTodayEntry();
-      debugPrint('[HiveDb] 🔄 Synced today\'s entry with widget');
     }
   }
 
@@ -936,13 +926,10 @@ class HiveDb {
   // Method to force refresh the Hive box
   static Future<void> refreshHiveBox() async {
     try {
-      debugPrint('[HiveDb] 🔄 Force refreshing Hive box');
       if (Hive.isBoxOpen('work_entries')) {
         await Hive.box('work_entries').close();
-        debugPrint('[HiveDb] 🔄 Closed work_entries box');
       }
       await Hive.openBox('work_entries');
-      debugPrint('[HiveDb] 🔄 Reopened work_entries box');
     } catch (e) {
       debugPrint('[HiveDb] ❌ Error refreshing box: $e');
     }
@@ -950,17 +937,6 @@ class HiveDb {
 
   static Future<String> exportDataToExcel(BuildContext context) async {
     try {
-      final result = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save Excel File',
-        fileName: 'work_hours_export.xlsx',
-        type: FileType.custom,
-        allowedExtensions: ['xlsx'],
-      );
-
-      if (result == null) {
-        throw Exception('No file path selected');
-      }
-
       final excel = Excel.createExcel();
       final sheet = excel.sheets.values.first;
 
@@ -992,14 +968,27 @@ class HiveDb {
         ]);
       }
 
-      // Save the file
+      // Encode the Excel file to bytes
       final bytes = excel.encode();
       if (bytes == null) {
         throw Exception('Failed to encode Excel file');
       }
 
-      final file = File(result);
-      await file.writeAsBytes(bytes);
+      // Convert List<int> to Uint8List
+      final uint8List = Uint8List.fromList(bytes);
+
+      // Save the file using FilePicker with bytes
+      final result = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Excel File',
+        fileName: 'work_hours_export.xlsx',
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+        bytes: uint8List, // Pass the Uint8List
+      );
+
+      if (result == null) {
+        throw Exception('No file path selected');
+      }
       
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -41,7 +41,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
         // Normalize the date to remove time component
         final normalizedDate = DateTime(date.year, date.month, date.day);
         _events[normalizedDate] = Map<String, dynamic>.from(value);
-        debugPrint('[$Tag] Data loaded for date: $normalizedDate');
 
       } catch (e) {
         debugPrint('[$Tag] Error parsing date: $e');

@@ -91,43 +91,35 @@ class MainActivity : FlutterActivity() {
         // Widget actions channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WIDGET_ACTIONS_CHANNEL)
             .setMethodCallHandler { call, result ->
-                Log.d(TAG, "[home_widget] Widget action received: ${call.method}")
                 when (call.method) {
                     "clockIn" -> {
-                        Log.d(TAG, "[home_widget] Processing clock in action")
                         try {
                             // This will be handled by the interactiveCallback in Flutter
                             result.success(null)
-                            Log.d(TAG, "[home_widget] ✅ Clock in action processed successfully")
                         } catch (e: Exception) {
                             Log.e(TAG, "[home_widget] ❌ Error processing clock in action: ${e.message}", e)
                             result.error("CLOCK_IN_ERROR", e.message, null)
                         }
                     }
                     "clockOut" -> {
-                        Log.d(TAG, "[home_widget] Processing clock out action")
                         try {
                             // This will be handled by the interactiveCallback in Flutter
                             result.success(null)
-                            Log.d(TAG, "[home_widget] ✅ Clock out action processed successfully")
                         } catch (e: Exception) {
                             Log.e(TAG, "[home_widget] ❌ Error processing clock out action: ${e.message}", e)
                             result.error("CLOCK_OUT_ERROR", e.message, null)
                         }
                     }
                     "clockInOut" -> {
-                        Log.d(TAG, "[home_widget] Processing clock in/out toggle action")
                         try {
                             // This will be handled by the interactiveCallback in Flutter
                             result.success(null)
-                            Log.d(TAG, "[home_widget] ✅ Clock in/out toggle action processed successfully")
                         } catch (e: Exception) {
                             Log.e(TAG, "[home_widget] ❌ Error processing clock in/out toggle action: ${e.message}", e)
                             result.error("CLOCK_IN_OUT_ERROR", e.message, null)
                         }
                     }
                     else -> {
-                        Log.w(TAG, "[home_widget] ⚠️ Unknown widget action: ${call.method}")
                         result.notImplemented()
                     }
                 }
@@ -179,38 +171,29 @@ class MainActivity : FlutterActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        Log.d(TAG, "[home_widget] onNewIntent received with action: ${intent.action}")
         
         if (intent.action == "com.example.work_hours.ACTION_CLOCK_IN_OUT") {
-            Log.d(TAG, "[home_widget] Processing clock in/out action from widget")
             Toast.makeText(this, "Widget action received in MainActivity", Toast.LENGTH_SHORT).show()
             
             try {
                 MethodChannel(flutterEngine!!.dartExecutor.binaryMessenger, "widget_actions")
                     .invokeMethod("clockInOut", null)
-                Log.d(TAG, "[home_widget] ✅ Successfully sent clock in/out action to Flutter")
                 Toast.makeText(this, "Action sent to Flutter", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 Log.e(TAG, "[home_widget] ❌ Error sending clock in/out action to Flutter: ${e.message}", e)
                 Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
-        } else {
-            Log.d(TAG, "[home_widget] Received intent with different action: ${intent.action}")
         }
     }
 
     // Widget functions from Java implementation
     private fun exitWidgetSettingsMode() {
         try {
-            Log.d(TAG, "Exiting widget settings mode")
-            
             // Call the widget provider's method to exit settings mode
             try {
                 val myHomeWidgetProviderClass = Class.forName("com.example.work_hours.MyHomeWidgetProvider")
                 val method = myHomeWidgetProviderClass.getMethod("exitSettingsMode", Context::class.java)
                 method.invoke(null, applicationContext)
-                
-                Log.d(TAG, "Widget settings mode exited successfully")
             } catch (e: Exception) {
                 Log.e(TAG, "Error calling exitSettingsMode: ${e.message}", e)
             }
@@ -222,8 +205,6 @@ class MainActivity : FlutterActivity() {
     private fun getWidgetInfo(): Map<String, Any> {
         val info = HashMap<String, Any>()
         try {
-            Log.d(TAG, "Getting widget information")
-            
             // Get widget manager and widget IDs
             val appWidgetManager = AppWidgetManager.getInstance(applicationContext)
             val componentName = ComponentName(applicationContext, Class.forName("com.example.work_hours.MyHomeWidgetProvider"))
@@ -243,8 +224,6 @@ class MainActivity : FlutterActivity() {
                 widgetIdList.add(id)
             }
             info["widgetIds"] = widgetIdList
-            
-            Log.d(TAG, "Widget info collected: $info")
         } catch (e: Exception) {
             Log.e(TAG, "Error getting widget info: ${e.message}", e)
             info["error"] = e.message ?: "Unknown error"
