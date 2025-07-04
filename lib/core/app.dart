@@ -173,45 +173,46 @@ Future<void> interactiveCallback(Uri? uri) async {
     
     // Handle widget actions based on the URI host
     if (uri.host == 'clock_in_out') {
+      debugPrint('[home_widget] Setting _isLoading true');
+      await HomeWidget.saveWidgetData('_isLoading', true);
+      await HomeWidget.updateWidget(
+        androidName: 'MyHomeWidgetProvider',
+        iOSName: 'MyHomeWidgetProvider',
+      );
       debugPrint('[home_widget] Processing clock in/out action via background callback');
-      
       // Check current status
       final isClockedIn = HiveDb.isClockedIn();
       debugPrint('[home_widget] Current status - isClockedIn: $isClockedIn');
-      
       if (isClockedIn) {
-        // Clock out
         debugPrint('[home_widget] Attempting to clock out');
         await HiveDb.clockOut(DateTime.now());
         debugPrint('[home_widget] ✅ Successfully clocked out via widget background callback');
       } else {
-        // Clock in
         debugPrint('[home_widget] Attempting to clock in');
         await HiveDb.clockIn(DateTime.now());
         debugPrint('[home_widget] ✅ Successfully clocked in via widget background callback');
-        
-        // Debug: Check if data was actually saved
-        final savedData = HiveDb.getDayEntry(DateTime.now());
-        debugPrint('[home_widget] 🔍 Debug: Saved data check - $savedData');
-        if (savedData != null) {
-          debugPrint('[home_widget] 🔍 Debug: Clock in time - ${savedData['in']}');
-          debugPrint('[home_widget] 🔍 Debug: Clock out time - ${savedData['out']}');
-        } else {
-          debugPrint('[home_widget] ❌ Debug: No data found after clock in!');
-        }
-        
-        // Debug: Print all entries to see what's in the database
-        debugPrint('[home_widget] 🔍 Debug: All entries in database:');
-        HiveDb.printAllWorkHourEntries();
       }
-      
-      // Update widget display
-      await _updateWidgetDisplay();
-      
+      // Debug: Check if data was actually saved
+      final savedData = HiveDb.getDayEntry(DateTime.now());
+      debugPrint('[home_widget] 🔍 Debug: Saved data check - $savedData');
+      if (savedData != null) {
+        debugPrint('[home_widget] 🔍 Debug: Clock in time - ${savedData['in']}');
+        debugPrint('[home_widget] 🔍 Debug: Clock out time - ${savedData['out']}');
+      } else {
+        debugPrint('[home_widget] ❌ Debug: No data found after clock in!');
+      }
+      // Debug: Print all entries to see what's in the database
+      debugPrint('[home_widget] 🔍 Debug: All entries in database:');
+      HiveDb.printAllWorkHourEntries();
+      debugPrint('[home_widget] Setting _isLoading false');
+      await HomeWidget.saveWidgetData('_isLoading', false);
+      await HomeWidget.updateWidget(
+        androidName: 'MyHomeWidgetProvider',
+        iOSName: 'MyHomeWidgetProvider',
+      );
     } else {
       debugPrint('[home_widget] ⚠️ Unknown widget action: ${uri.host}');
     }
-    
   } catch (e) {
     debugPrint('[home_widget] ❌ Error processing widget action: $e');
   }

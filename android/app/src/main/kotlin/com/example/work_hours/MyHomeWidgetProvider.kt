@@ -252,6 +252,25 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.tv_clock_out_time, android.view.View.VISIBLE)
         views.setViewVisibility(R.id.btn_clock_in_out, android.view.View.VISIBLE)
 
+        // Set up clock in/out button click to use HomeWidgetBackgroundReceiver
+        val clockInOutIntent = Intent(context, es.antonborri.home_widget.HomeWidgetBackgroundReceiver::class.java).apply {
+            action = "com.example.work_hours.ACTION_CLOCK_IN_OUT"
+            data = Uri.parse("myapp://clock_in_out")
+        }
+        val clockInOutPendingIntent = PendingIntent.getBroadcast(
+            context, 100, clockInOutIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        views.setOnClickPendingIntent(R.id.btn_clock_in_out, clockInOutPendingIntent)
+
+        // Show/hide loading label based on _isLoading
+        val prefs = HomeWidgetPlugin.getData(context)
+        val isLoading = prefs.getBoolean("_isLoading", false)
+        if (isLoading) {
+            views.setViewVisibility(R.id.tv_loading_label, android.view.View.VISIBLE)
+        } else {
+            views.setViewVisibility(R.id.tv_loading_label, android.view.View.GONE)
+        }
+
         // Hide Remaining and Overtime labels/values for home screen
         views.setViewVisibility(R.id.tv_remaining_label, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_remaining_value, android.view.View.GONE)
@@ -626,7 +645,7 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
             if (calendarData.isNotEmpty()) {
                 // Parse calendar data and populate days
                 val days = calendarData.split(",")
-                populateCalendarDays(views, days)
+                populateCalendarDays(context, views, days)
             } else {
                 // Create empty calendar if no data
                 createEmptyCalendar(views, now)
@@ -638,7 +657,7 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         }
     }
     
-    private fun populateCalendarDays(views: RemoteViews, days: List<String>) {
+    private fun populateCalendarDays(context: Context, views: RemoteViews, days: List<String>) {
         val dayIds = arrayOf(
             R.id.day_1, R.id.day_2, R.id.day_3, R.id.day_4, R.id.day_5, R.id.day_6, R.id.day_7,
             R.id.day_8, R.id.day_9, R.id.day_10, R.id.day_11, R.id.day_12, R.id.day_13, R.id.day_14,
@@ -647,34 +666,49 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
             R.id.day_29, R.id.day_30, R.id.day_31, R.id.day_32, R.id.day_33, R.id.day_34, R.id.day_35,
             R.id.day_36, R.id.day_37, R.id.day_38, R.id.day_39, R.id.day_40, R.id.day_41, R.id.day_42
         )
-        
+        // Get background color from shared preferences
+        val prefs = context.getSharedPreferences("WidgetPrefs", Context.MODE_PRIVATE)
+        val backgroundColor = prefs.getString("backgroundColor", "white") ?: "white"
+        val isDarkBg = backgroundColor == "black" || backgroundColor == "blue" || backgroundColor == "green"
         for (i in 0 until minOf(days.size, dayIds.size)) {
             val dayData = days[i]
-            val dayView = createEnhancedDayView(dayData)
+            val (dayView, status) = createEnhancedDayViewWithStatus(dayData)
             views.setTextViewText(dayIds[i], dayView)
-            
-            // Note: Text colors are now handled dynamically in applyWidgetSettings
-            // based on background color for better visibility
+            // Set color based on status and background
+            val textColor = when (status) {
+                "completed" -> if (isDarkBg) android.graphics.Color.parseColor("#A5D6A7") /* light green */ else android.graphics.Color.parseColor("#388E3C") /* dark green */
+                "inprogress" -> if (isDarkBg) android.graphics.Color.parseColor("#FFD180") /* light orange */ else android.graphics.Color.parseColor("#FFA500") /* dark orange */
+                "offday" -> if (isDarkBg) android.graphics.Color.parseColor("#90CAF9") /* light blue */ else android.graphics.Color.parseColor("#1976D2") /* dark blue */
+                else -> if (isDarkBg) android.graphics.Color.WHITE else android.graphics.Color.BLACK
+            }
+            views.setInt(dayIds[i], "setTextColor", textColor)
         }
     }
-    
-    private fun createEnhancedDayView(dayData: String): String {
-        // Parse enhanced day data format: "day:status:time" (e.g., "15:completed:8h30m", "16:inprogress:4h15m", "17:offday:")
+
+    // Helper to get the default text color (black or white) for empty days
+    private fun getDefaultCalendarTextColor(views: RemoteViews): Int {
+        // This is a fallback; actual dynamic color is set in applyWidgetSettings
+        // Use black as a safe default
+        return android.graphics.Color.BLACK
+    }
+
+    // Returns Pair<displayText, status>
+    private fun createEnhancedDayViewWithStatus(dayData: String): Pair<String, String> {
         val parts = dayData.split(":")
         if (parts.size >= 2) {
             val day = parts[0]
             val status = parts[1]
             val time = if (parts.size >= 3) parts[2] else ""
-            val secondLine = when (status) {
-                "completed" -> if (time.isNotEmpty()) time else "✓"
-                "inprogress" -> if (time.isNotEmpty()) time else "○"
-                "offday" -> "OFF"
-                else -> " " // Always reserve space for the second line
+            val (secondLine, emoji) = when (status) {
+                "completed" -> if (time.isNotEmpty()) Pair(time, "✅") else Pair("✓", "✅")
+                "inprogress" -> if (time.isNotEmpty()) Pair(time, "🕒") else Pair("○", "🕒")
+                "offday" -> Pair("OFF", "💤")
+                else -> Pair(" ", "")
             }
-            return "$day\n$secondLine"
+            return Pair("$day\n$secondLine $emoji".trimEnd(), status)
         }
         // If data is malformed, still reserve two lines
-        return dayData.split(":")[0] + "\n "
+        return Pair(dayData.split(":")[0] + "\n ", "empty")
     }
     
     private fun createEmptyCalendar(views: RemoteViews, calendar: Calendar) {

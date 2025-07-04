@@ -24,7 +24,9 @@ class WidgetService {
       await HomeWidget.setAppGroupId('group.com.workhours.widget');
       
       // Set up method channel handler for widget actions
+      debugPrint('[home_widget] 🔍 Setting up method channel handler for widget actions');
       _widgetActionsChannel.setMethodCallHandler(_handleWidgetAction);
+      debugPrint('[home_widget] ✅ Method channel handler set up successfully');
       
       debugPrint('[home_widget] ✅ Widget service initialized successfully');
     } catch (e) {
@@ -34,21 +36,25 @@ class WidgetService {
   
   // Handle widget actions from Android
   static Future<dynamic> _handleWidgetAction(MethodCall call) async {
-    debugPrint('[home_widget] Widget action received: ${call.method}');
+    debugPrint('[home_widget] 🔍 Widget action received: ${call.method}');
+    debugPrint('[home_widget] 🔍 Method call arguments: ${call.arguments}');
     
     try {
       switch (call.method) {
         case 'clockInOut':
-          debugPrint('[home_widget] Processing clock in/out toggle action');
+          debugPrint('[home_widget] 🔍 Processing clock in/out toggle action');
           await _handleClockInOut();
+          debugPrint('[home_widget] ✅ Clock in/out toggle action completed successfully');
           break;
         case 'clockIn':
-          debugPrint('[home_widget] Processing clock in action');
+          debugPrint('[home_widget] 🔍 Processing clock in action');
           await _handleClockIn();
+          debugPrint('[home_widget] ✅ Clock in action completed successfully');
           break;
         case 'clockOut':
-          debugPrint('[home_widget] Processing clock out action');
+          debugPrint('[home_widget] 🔍 Processing clock out action');
           await _handleClockOut();
+          debugPrint('[home_widget] ✅ Clock out action completed successfully');
           break;
         default:
           debugPrint('[home_widget] ⚠️ Unknown widget action: ${call.method}');
@@ -57,31 +63,36 @@ class WidgetService {
             message: 'Unknown widget action: ${call.method}',
           );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('[home_widget] ❌ Error handling widget action: $e');
+      debugPrint('[home_widget] ❌ Stack trace: $stackTrace');
       rethrow;
     }
   }
   
   // Handle clock in/out toggle
   static Future<void> _handleClockInOut() async {
+    debugPrint('[home_widget] 🔍 _handleClockInOut called');
     try {
       final isClockedIn = HiveDb.isClockedIn();
-      debugPrint('[home_widget] Current status - isClockedIn: $isClockedIn');
+      debugPrint('[home_widget] 🔍 Current status - isClockedIn: $isClockedIn');
       
       if (isClockedIn) {
-        debugPrint('[home_widget] Attempting to clock out');
+        debugPrint('[home_widget] 🔍 Attempting to clock out');
         await HiveDb.clockOut(DateTime.now());
         debugPrint('[home_widget] ✅ Successfully clocked out via widget');
       } else {
-        debugPrint('[home_widget] Attempting to clock in');
+        debugPrint('[home_widget] 🔍 Attempting to clock in');
         await HiveDb.clockIn(DateTime.now());
         debugPrint('[home_widget] ✅ Successfully clocked in via widget');
       }
       
+      debugPrint('[home_widget] 🔍 Updating widget display');
       await _updateWidgetDisplay();
-    } catch (e) {
+      debugPrint('[home_widget] ✅ _handleClockInOut completed successfully');
+    } catch (e, stackTrace) {
       debugPrint('[home_widget] ❌ Error in clock in/out toggle: $e');
+      debugPrint('[home_widget] ❌ Stack trace: $stackTrace');
       rethrow;
     }
   }
@@ -120,8 +131,9 @@ class WidgetService {
   
   // Update widget display
   static Future<void> _updateWidgetDisplay() async {
+    debugPrint('[home_widget] 🔍 _updateWidgetDisplay called');
     try {
-      debugPrint('[home_widget] Updating widget display');
+      debugPrint('[home_widget] 🔍 Getting current status');
       
       // Get current status
       final isClockedIn = HiveDb.isClockedIn();
@@ -133,22 +145,25 @@ class WidgetService {
       final seconds = currentDuration.inSeconds.remainder(60);
       final durationText = '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
       
-      debugPrint('[home_widget] Status - isClockedIn: $isClockedIn, duration: $durationText');
+      debugPrint('[home_widget] 🔍 Status - isClockedIn: $isClockedIn, duration: $durationText');
       
       // Update widget data
+      debugPrint('[home_widget] 🔍 Saving widget data');
       await HomeWidget.saveWidgetData('_isClockedIn', isClockedIn);
       await HomeWidget.saveWidgetData('_durationText', durationText);
       await HomeWidget.saveWidgetData('_lastUpdate', DateTime.now().toIso8601String());
       
       // Update widget UI
+      debugPrint('[home_widget] 🔍 Updating widget UI');
       await HomeWidget.updateWidget(
         androidName: 'MyHomeWidgetProvider',
         iOSName: 'MyHomeWidgetProvider',
       );
       
       debugPrint('[home_widget] ✅ Widget display updated successfully');
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('[home_widget] ❌ Error updating widget display: $e');
+      debugPrint('[home_widget] ❌ Stack trace: $stackTrace');
     }
   }
   

@@ -130,6 +130,19 @@
                 android:clickable="true"
                 android:focusable="true" />
 
+            <!-- Loading label below the clock in/out button -->
+            <TextView
+                android:id="@+id/tv_loading_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Loading..."
+                android:textSize="14sp"
+                android:textColor="@android:color/darker_gray"
+                android:gravity="center"
+                android:layout_gravity="center_horizontal"
+                android:visibility="gone"
+                android:layout_marginTop="4dp" />
+
             <!-- Remaining Label/Value -->
             <LinearLayout
                 android:layout_width="match_parent"

@@ -48,22 +48,39 @@ class HiveDb {
 
   // Work Hours Operations
   static Future<void> clockIn(DateTime time) async {
+    debugPrint('[HiveDb] 🔍 clockIn called with time: $time');
     try {
-      if (!Hive.isBoxOpen('work_entries')) await Hive.openBox('work_entries');
+      debugPrint('[HiveDb] 🔍 Checking if work_entries box is open');
+      if (!Hive.isBoxOpen('work_entries')) {
+        debugPrint('[HiveDb] 🔍 Opening work_entries box');
+        await Hive.openBox('work_entries');
+      }
       final box = Hive.box('work_entries');
       final dateKey = DateFormat('yyyy-MM-dd').format(time);
+      debugPrint('[HiveDb] 🔍 Using date key: $dateKey');
+      
       final existing = box.get(dateKey);
+      debugPrint('[HiveDb] 🔍 Existing entry: $existing');
       final String? description = existing?['description'] as String?;
-      await box.put(dateKey, {
+      
+      final newEntry = {
         'in': time.toIso8601String(),
         'out': null,
         'duration': null,
         'offDay': false,
         'description': description,
-      });
+      };
+      debugPrint('[HiveDb] 🔍 Saving new entry: $newEntry');
+      
+      await box.put(dateKey, newEntry);
+      debugPrint('[HiveDb] ✅ Entry saved successfully');
+      
+      debugPrint('[HiveDb] 🔍 Syncing today entry');
       await syncTodayEntry();
-    } catch (e) {
-      debugPrint('Error in clockIn: $e');
+      debugPrint('[HiveDb] ✅ clockIn completed successfully');
+    } catch (e, stackTrace) {
+      debugPrint('[HiveDb] ❌ Error in clockIn: $e');
+      debugPrint('[HiveDb] ❌ Stack trace: $stackTrace');
       rethrow;
     }
   }
@@ -348,24 +365,47 @@ class HiveDb {
   }
 
   static Future<void> clockOut(DateTime time) async {
+    debugPrint('[HiveDb] 🔍 clockOut called with time: $time');
     try {
-      if (!Hive.isBoxOpen('work_entries')) await Hive.openBox('work_entries');
+      debugPrint('[HiveDb] 🔍 Checking if work_entries box is open');
+      if (!Hive.isBoxOpen('work_entries')) {
+        debugPrint('[HiveDb] 🔍 Opening work_entries box');
+        await Hive.openBox('work_entries');
+      }
       final box = Hive.box('work_entries');
       final dateKey = DateFormat('yyyy-MM-dd').format(time);
+      debugPrint('[HiveDb] 🔍 Using date key: $dateKey');
+      
       final entry = box.get(dateKey);
+      debugPrint('[HiveDb] 🔍 Found entry: $entry');
+      
       if (entry == null) {
+        debugPrint('[HiveDb] ❌ No clock-in record found for today');
         throw Exception('No clock-in record found for today');
       }
+      
       final clockInTime = DateTime.parse(entry['in'] as String);
+      debugPrint('[HiveDb] 🔍 Clock in time: $clockInTime');
+      
       final duration = time.difference(clockInTime).inMinutes;
-      await box.put(dateKey, {
+      debugPrint('[HiveDb] 🔍 Calculated duration: $duration minutes');
+      
+      final updatedEntry = {
         ...entry,
         'out': time.toIso8601String(),
         'duration': duration,
-      });
+      };
+      debugPrint('[HiveDb] 🔍 Saving updated entry: $updatedEntry');
+      
+      await box.put(dateKey, updatedEntry);
+      debugPrint('[HiveDb] ✅ Entry updated successfully');
+      
+      debugPrint('[HiveDb] 🔍 Syncing today entry');
       await syncTodayEntry();
-    } catch (e) {
-      debugPrint('Error in clockOut: $e');
+      debugPrint('[HiveDb] ✅ clockOut completed successfully');
+    } catch (e, stackTrace) {
+      debugPrint('[HiveDb] ❌ Error in clockOut: $e');
+      debugPrint('[HiveDb] ❌ Stack trace: $stackTrace');
       rethrow;
     }
   }
@@ -766,29 +806,52 @@ class HiveDb {
 
   // Clock In/Out Status
   static bool isClockedIn() {
+    debugPrint('[HiveDb] 🔍 isClockedIn called');
     try {
-      if (!Hive.isBoxOpen('work_entries')) return false;
+      if (!Hive.isBoxOpen('work_entries')) {
+        debugPrint('[HiveDb] 🔍 work_entries box not open, returning false');
+        return false;
+      }
       final box = Hive.box('work_entries');
       final today = DateTime.now();
       final dateKey = DateFormat('yyyy-MM-dd').format(today);
+      debugPrint('[HiveDb] 🔍 Checking entry for date: $dateKey');
+      
       final entry = box.get(dateKey);
-      if (entry == null) return false;
+      debugPrint('[HiveDb] 🔍 Found entry: $entry');
+      
+      if (entry == null) {
+        debugPrint('[HiveDb] 🔍 No entry found, returning false');
+        return false;
+      }
+      
       final clockIn = entry['in'] != null;
       final clockOut = entry['out'] != null;
-      return clockIn && !clockOut;
-    } catch (e) {
-      debugPrint('Error in isClockedIn: $e');
+      final result = clockIn && !clockOut;
+      
+      debugPrint('[HiveDb] 🔍 Clock in: $clockIn, Clock out: $clockOut, Result: $result');
+      return result;
+    } catch (e, stackTrace) {
+      debugPrint('[HiveDb] ❌ Error in isClockedIn: $e');
+      debugPrint('[HiveDb] ❌ Stack trace: $stackTrace');
       return false;
     }
   }
 
   static Future<void> syncTodayEntry() async {
+    debugPrint('[HiveDb] 🔍 syncTodayEntry called');
     try {
-      if (!Hive.isBoxOpen('work_entries')) await Hive.openBox('work_entries');
+      if (!Hive.isBoxOpen('work_entries')) {
+        debugPrint('[HiveDb] 🔍 Opening work_entries box');
+        await Hive.openBox('work_entries');
+      }
       final box = Hive.box('work_entries');
       final today = DateTime.now();
       final dateKey = DateFormat('yyyy-MM-dd').format(today);
+      debugPrint('[HiveDb] 🔍 Checking entry for date: $dateKey');
+      
       final entry = box.get(dateKey);
+      debugPrint('[HiveDb] 🔍 Found entry: $entry');
       
       if (entry != null) {
         final clockIn = entry['in'] != null ? DateTime.parse(entry['in'] as String) : null;
@@ -796,6 +859,9 @@ class HiveDb {
         final duration = entry['duration'] as int?;
         final offDay = entry['offDay'] as bool? ?? false;
         
+        debugPrint('[HiveDb] 🔍 Parsed data - Clock In: $clockIn, Clock Out: $clockOut, Duration: $duration, Off Day: $offDay');
+        
+        debugPrint('[HiveDb] 🔍 Saving widget data');
         await HomeWidget.saveWidgetData('clockIn', clockIn?.toIso8601String());
         await HomeWidget.saveWidgetData('clockOut', clockOut?.toIso8601String());
         await HomeWidget.saveWidgetData('duration', duration != null ? _formatDurationForWidgetDb(duration) : null);
@@ -803,6 +869,7 @@ class HiveDb {
         
         debugPrint('[HiveDb] 🔄 Synced widget data - Clock In: ${clockIn?.toIso8601String()}, Clock Out: ${clockOut?.toIso8601String()}');
       } else {
+        debugPrint('[HiveDb] 🔍 No entry found, clearing widget data');
         await HomeWidget.saveWidgetData('clockIn', null);
         await HomeWidget.saveWidgetData('clockOut', null);
         await HomeWidget.saveWidgetData('duration', null);
@@ -811,15 +878,19 @@ class HiveDb {
         debugPrint('[HiveDb] 🔄 Synced widget data - No entry found, cleared times');
       }
       
+      debugPrint('[HiveDb] 🔍 Updating widget');
       await HomeWidget.updateWidget(
         androidName: 'MyHomeWidgetProvider',
         iOSName: 'MyHomeWidgetProvider',
       );
       
       // Update overtime and remaining information
+      debugPrint('[HiveDb] 🔍 Updating overtime and remaining info');
       await updateWidgetWithOvertimeInfo();
-    } catch (e) {
-      debugPrint('Error in syncTodayEntry: $e');
+      debugPrint('[HiveDb] ✅ syncTodayEntry completed successfully');
+    } catch (e, stackTrace) {
+      debugPrint('[HiveDb] ❌ Error in syncTodayEntry: $e');
+      debugPrint('[HiveDb] ❌ Stack trace: $stackTrace');
     }
   }
 
@@ -1194,9 +1265,12 @@ class HiveDb {
         final todayEarnings = currentSalary['todayEarnings'] as double? ?? 0.0;
         final totalEarnings = currentSalary['totalEarnings'] as double? ?? 0.0;
         
-        // Format currency values
-        final todayEarningsText = '\$${todayEarnings.toStringAsFixed(2)}';
-        final monthlyEarningsText = '\$${totalEarnings.toStringAsFixed(2)}';
+        // Get currency from settings
+        final currency = getCurrency();
+        
+        // Format currency values with correct currency
+        final todayEarningsText = '$currency ${todayEarnings.toStringAsFixed(2)}';
+        final monthlyEarningsText = '$currency ${totalEarnings.toStringAsFixed(2)}';
         
         await HomeWidget.saveWidgetData<String>('_todayEarnings', todayEarningsText);
         await HomeWidget.saveWidgetData<String>('_monthlyEarnings', monthlyEarningsText);
@@ -1206,8 +1280,9 @@ class HiveDb {
         debugPrint("Monthly Earnings: $monthlyEarningsText");
       } catch (e) {
         debugPrint("Error saving salary data to widget: $e");
-        await HomeWidget.saveWidgetData<String>('_todayEarnings', '\$0.00');
-        await HomeWidget.saveWidgetData<String>('_monthlyEarnings', '\$0.00');
+        final currency = getCurrency();
+        await HomeWidget.saveWidgetData<String>('_todayEarnings', '$currency 0.00');
+        await HomeWidget.saveWidgetData<String>('_monthlyEarnings', '$currency 0.00');
       }
 
       // Save calendar data for widget
