@@ -73,6 +73,11 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
                         views.setViewVisibility(R.id.home_screen_content, android.view.View.VISIBLE)
                         showHomeScreenContent(context, views)
                     }
+                    TAB_HISTORY -> {
+                        // Show history content
+                        views.setViewVisibility(R.id.home_screen_content, android.view.View.VISIBLE)
+                        showHistoryTabContent(context, views)
+                    }
                     TAB_SUMMARY -> {
                         // Show summary content
                         views.setViewVisibility(R.id.home_screen_content, android.view.View.VISIBLE)
@@ -258,8 +263,36 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.tv_today_earnings_value, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_monthly_earnings_label, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_monthly_earnings_value, android.view.View.GONE)
+        
+        // Hide mini calendar for home screen
+        views.setViewVisibility(R.id.mini_calendar_container, android.view.View.GONE)
     }
 
+    private fun showHistoryTabContent(context: Context, views: RemoteViews) {
+        // Hide clock in/out time labels and button
+        views.setViewVisibility(R.id.tv_clock_in_time, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_clock_out_time, android.view.View.GONE)
+        views.setViewVisibility(R.id.btn_clock_in_out, android.view.View.GONE)
+        
+        // Hide remaining and overtime labels/values
+        views.setViewVisibility(R.id.tv_remaining_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_remaining_value, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_overtime_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_overtime_value, android.view.View.GONE)
+        
+        // Hide earnings labels/values
+        views.setViewVisibility(R.id.tv_today_earnings_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_today_earnings_value, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_monthly_earnings_label, android.view.View.GONE)
+        views.setViewVisibility(R.id.tv_monthly_earnings_value, android.view.View.GONE)
+
+        // Show mini calendar
+        views.setViewVisibility(R.id.mini_calendar_container, android.view.View.VISIBLE)
+        
+        // Populate mini calendar
+        populateMiniCalendar(context, views)
+    }
+    
     private fun showSummaryTabContent(context: Context, views: RemoteViews) {
         // Hide clock in/out time labels and button
         views.setViewVisibility(R.id.tv_clock_in_time, android.view.View.GONE)
@@ -277,6 +310,9 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.tv_today_earnings_value, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_monthly_earnings_label, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_monthly_earnings_value, android.view.View.GONE)
+
+        // Hide mini calendar for summary tab
+        views.setViewVisibility(R.id.mini_calendar_container, android.view.View.GONE)
 
         try {
             val prefs = HomeWidgetPlugin.getData(context)
@@ -314,6 +350,9 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.tv_monthly_earnings_label, android.view.View.VISIBLE)
         views.setViewVisibility(R.id.tv_monthly_earnings_value, android.view.View.VISIBLE)
 
+        // Hide mini calendar for salary tab
+        views.setViewVisibility(R.id.mini_calendar_container, android.view.View.GONE)
+
         try {
             val prefs = HomeWidgetPlugin.getData(context)
             val todayEarnings = prefs.getString("_todayEarnings", "$0.00")
@@ -348,6 +387,9 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.tv_today_earnings_value, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_monthly_earnings_label, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_monthly_earnings_value, android.view.View.GONE)
+        
+        // Hide mini calendar
+        views.setViewVisibility(R.id.mini_calendar_container, android.view.View.GONE)
     }
     
     private fun setupNavigationButtons(context: Context, views: RemoteViews, currentTab: Int) {
@@ -539,6 +581,21 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setInt(R.id.tv_today_earnings_value, "setTextColor", textColor)
         views.setInt(R.id.tv_monthly_earnings_label, "setTextColor", textColor)
         views.setInt(R.id.tv_monthly_earnings_value, "setTextColor", textColor)
+        views.setInt(R.id.tv_calendar_header, "setTextColor", textColor)
+        
+        // Update calendar day text colors
+        val dayIds = arrayOf(
+            R.id.day_1, R.id.day_2, R.id.day_3, R.id.day_4, R.id.day_5, R.id.day_6, R.id.day_7,
+            R.id.day_8, R.id.day_9, R.id.day_10, R.id.day_11, R.id.day_12, R.id.day_13, R.id.day_14,
+            R.id.day_15, R.id.day_16, R.id.day_17, R.id.day_18, R.id.day_19, R.id.day_20, R.id.day_21,
+            R.id.day_22, R.id.day_23, R.id.day_24, R.id.day_25, R.id.day_26, R.id.day_27, R.id.day_28,
+            R.id.day_29, R.id.day_30, R.id.day_31, R.id.day_32, R.id.day_33, R.id.day_34, R.id.day_35,
+            R.id.day_36, R.id.day_37, R.id.day_38, R.id.day_39, R.id.day_40, R.id.day_41, R.id.day_42
+        )
+        
+        for (dayId in dayIds) {
+            views.setInt(dayId, "setTextColor", textColor)
+        }
     }
     
     private fun applyWidgetSettings(context: Context) {
@@ -547,6 +604,95 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         val appWidgetIds = appWidgetManager.getAppWidgetIds(ComponentName(context, MyHomeWidgetProvider::class.java))
         if (appWidgetIds.isNotEmpty()) {
             onUpdate(context, appWidgetManager, appWidgetIds)
+        }
+    }
+    
+    private fun populateMiniCalendar(context: Context, views: RemoteViews) {
+        try {
+            val now = Calendar.getInstance()
+            val currentMonth = now.get(Calendar.MONTH)
+            val currentYear = now.get(Calendar.YEAR)
+            
+            // Set calendar header
+            val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+            val headerText = "${monthNames[currentMonth]} $currentYear"
+            views.setTextViewText(R.id.tv_calendar_header, headerText)
+            
+            // Get calendar data from widget
+            val prefs = HomeWidgetPlugin.getData(context)
+            val calendarData = prefs.getString("_calendarData", "") ?: ""
+            
+            if (calendarData.isNotEmpty()) {
+                // Parse calendar data and populate days
+                val days = calendarData.split(",")
+                populateCalendarDays(views, days)
+            } else {
+                // Create empty calendar if no data
+                createEmptyCalendar(views, now)
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "[home_widget] Error populating mini calendar: ${e.message}", e)
+            createEmptyCalendar(views, Calendar.getInstance())
+        }
+    }
+    
+    private fun populateCalendarDays(views: RemoteViews, days: List<String>) {
+        val dayIds = arrayOf(
+            R.id.day_1, R.id.day_2, R.id.day_3, R.id.day_4, R.id.day_5, R.id.day_6, R.id.day_7,
+            R.id.day_8, R.id.day_9, R.id.day_10, R.id.day_11, R.id.day_12, R.id.day_13, R.id.day_14,
+            R.id.day_15, R.id.day_16, R.id.day_17, R.id.day_18, R.id.day_19, R.id.day_20, R.id.day_21,
+            R.id.day_22, R.id.day_23, R.id.day_24, R.id.day_25, R.id.day_26, R.id.day_27, R.id.day_28,
+            R.id.day_29, R.id.day_30, R.id.day_31, R.id.day_32, R.id.day_33, R.id.day_34, R.id.day_35,
+            R.id.day_36, R.id.day_37, R.id.day_38, R.id.day_39, R.id.day_40, R.id.day_41, R.id.day_42
+        )
+        
+        for (i in 0 until minOf(days.size, dayIds.size)) {
+            val dayData = days[i]
+            val dayView = createEnhancedDayView(dayData)
+            views.setTextViewText(dayIds[i], dayView)
+            
+            // Note: Text colors are now handled dynamically in applyWidgetSettings
+            // based on background color for better visibility
+        }
+    }
+    
+    private fun createEnhancedDayView(dayData: String): String {
+        // Parse enhanced day data format: "day:status:time" (e.g., "15:completed:8h30m", "16:inprogress:4h15m", "17:offday:")
+        val parts = dayData.split(":")
+        if (parts.size >= 2) {
+            val day = parts[0]
+            val status = parts[1]
+            val time = if (parts.size >= 3) parts[2] else ""
+            val secondLine = when (status) {
+                "completed" -> if (time.isNotEmpty()) time else "✓"
+                "inprogress" -> if (time.isNotEmpty()) time else "○"
+                "offday" -> "OFF"
+                else -> " " // Always reserve space for the second line
+            }
+            return "$day\n$secondLine"
+        }
+        // If data is malformed, still reserve two lines
+        return dayData.split(":")[0] + "\n "
+    }
+    
+    private fun createEmptyCalendar(views: RemoteViews, calendar: Calendar) {
+        // Create a simple empty calendar structure
+        Log.d(TAG, "[home_widget] Creating empty calendar for ${calendar.get(Calendar.MONTH)}/${calendar.get(Calendar.YEAR)}")
+        
+        // Clear all day views
+        val dayIds = arrayOf(
+            R.id.day_1, R.id.day_2, R.id.day_3, R.id.day_4, R.id.day_5, R.id.day_6, R.id.day_7,
+            R.id.day_8, R.id.day_9, R.id.day_10, R.id.day_11, R.id.day_12, R.id.day_13, R.id.day_14,
+            R.id.day_15, R.id.day_16, R.id.day_17, R.id.day_18, R.id.day_19, R.id.day_20, R.id.day_21,
+            R.id.day_22, R.id.day_23, R.id.day_24, R.id.day_25, R.id.day_26, R.id.day_27, R.id.day_28,
+            R.id.day_29, R.id.day_30, R.id.day_31, R.id.day_32, R.id.day_33, R.id.day_34, R.id.day_35,
+            R.id.day_36, R.id.day_37, R.id.day_38, R.id.day_39, R.id.day_40, R.id.day_41, R.id.day_42
+        )
+        
+        for (dayId in dayIds) {
+            views.setTextViewText(dayId, "")
         }
     }
 } 

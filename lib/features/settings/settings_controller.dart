@@ -146,39 +146,39 @@ class SettingsController extends ChangeNotifier {
 
   Future<void> exportDataToExcel(BuildContext context) async {
     try {
-      final excel = Excel.createExcel();
-      final sheet = excel.sheets.values.first;
+        final excel = Excel.createExcel();
+        final sheet = excel.sheets.values.first;
 
-      // Add headers
-      sheet.appendRow([
-        TextCellValue('Date'),
-        TextCellValue('Clock In'),
-        TextCellValue('Clock Out'),
-        TextCellValue('Hours'),
-        TextCellValue('Overtime'),
-      ]);
-
-      // Get work entries from repository
-      final entries = await _repository.getAllWorkEntries();
-      final settings = await _repository.getSettings();
-      
-      for (final entry in entries) {
-        final totalHours = entry.duration / 60.0;
-        final expectedHours = settings?.dailyTargetHours ?? 8.0;
-        final overtime = totalHours > expectedHours ? totalHours - expectedHours : 0.0;
-        final regularHours = totalHours - overtime;
-
+        // Add headers
         sheet.appendRow([
-          TextCellValue(entry.date.toString()),
-          TextCellValue(entry.clockIn.toString()),
-          TextCellValue(entry.clockOut?.toString() ?? ''),
-          TextCellValue(regularHours.toStringAsFixed(2)),
-          TextCellValue(overtime.toStringAsFixed(2)),
+          TextCellValue('Date'),
+          TextCellValue('Clock In'),
+          TextCellValue('Clock Out'),
+          TextCellValue('Hours'),
+          TextCellValue('Overtime'),
         ]);
-      }
+
+        // Get work entries from repository
+        final entries = await _repository.getAllWorkEntries();
+        final settings = await _repository.getSettings();
+        
+        for (final entry in entries) {
+          final totalHours = entry.duration / 60.0;
+          final expectedHours = settings?.dailyTargetHours ?? 8.0;
+          final overtime = totalHours > expectedHours ? totalHours - expectedHours : 0.0;
+          final regularHours = totalHours - overtime;
+
+          sheet.appendRow([
+            TextCellValue(entry.date.toString()),
+            TextCellValue(entry.clockIn.toString()),
+            TextCellValue(entry.clockOut?.toString() ?? ''),
+            TextCellValue(regularHours.toStringAsFixed(2)),
+            TextCellValue(overtime.toStringAsFixed(2)),
+          ]);
+        }
 
       // Encode the Excel file to bytes
-      final bytes = excel.encode();
+        final bytes = excel.encode();
       if (bytes == null) {
         throw Exception('Failed to encode Excel file');
       }
@@ -196,10 +196,10 @@ class SettingsController extends ChangeNotifier {
       );
 
       if (result != null) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Data exported successfully')),
-          );
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Data exported successfully')),
+            );
         }
       }
     } catch (e) {

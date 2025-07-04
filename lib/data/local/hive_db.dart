@@ -1210,6 +1210,16 @@ class HiveDb {
         await HomeWidget.saveWidgetData<String>('_monthlyEarnings', '\$0.00');
       }
 
+      // Save calendar data for widget
+      try {
+        final calendarData = generateCalendarData();
+        await HomeWidget.saveWidgetData<String>('_calendarData', calendarData);
+        debugPrint("Saving calendar widget data: $calendarData");
+      } catch (e) {
+        debugPrint("Error saving calendar data to widget: $e");
+        await HomeWidget.saveWidgetData<String>('_calendarData', '');
+      }
+
       debugPrint("Saving extended widget data:");
       debugPrint("Month: $currentMonthName");
       debugPrint("Overtime: $overtimeText");
@@ -1236,6 +1246,80 @@ class HiveDb {
     } catch (e, stackTrace) {
       debugPrint('❌ [WIDGET_DEBUG] Error updating widget with overtime info: $e');
       debugPrint('❌ [WIDGET_DEBUG] Stack trace: $stackTrace');
+    }
+  }
+
+  static String generateCalendarData() {
+    try {
+      final now = DateTime.now();
+      final monthStart = DateTime(now.year, now.month, 1);
+      final monthEnd = DateTime(now.year, now.month + 1, 0);
+      
+      // Get all entries for the current month
+      final allEntries = getAllEntries();
+      final calendarData = <String>[];
+      
+      // Generate calendar data for 6 weeks (42 days)
+      for (int week = 0; week < 6; week++) {
+        for (int dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
+          final dayIndex = week * 7 + dayOfWeek;
+          final date = monthStart.add(Duration(days: dayIndex - monthStart.weekday + 1));
+          
+          // Check if this date is in the current month
+          if (date.month == now.month && date.year == now.year) {
+            final dateKey = DateFormat('yyyy-MM-dd').format(date);
+            final entry = allEntries[dateKey];
+            
+            if (entry != null) {
+              final isOffDay = entry['offDay'] == true;
+              final hasClockIn = entry['in'] != null;
+              final hasClockOut = entry['out'] != null;
+              final duration = entry['duration'] as int?;
+              
+              String status;
+              String timeInfo = '';
+              
+              if (isOffDay) {
+                status = 'offday';
+                timeInfo = 'OFF';
+              } else if (hasClockIn && hasClockOut) {
+                status = 'completed';
+                if (duration != null) {
+                  final hours = duration ~/ 60;
+                  final minutes = duration % 60;
+                  timeInfo = '${hours}h${minutes}m';
+                } else {
+                  timeInfo = '✓';
+                }
+              } else if (hasClockIn) {
+                status = 'inprogress';
+                if (duration != null) {
+                  final hours = duration ~/ 60;
+                  final minutes = duration % 60;
+                  timeInfo = '${hours}h${minutes}m';
+                } else {
+                  timeInfo = '○';
+                }
+              } else {
+                status = 'empty';
+                timeInfo = '';
+              }
+              
+              calendarData.add('${date.day}:$status:$timeInfo');
+            } else {
+              calendarData.add('${date.day}:empty:');
+            }
+          } else {
+            // Date outside current month
+            calendarData.add(':empty:');
+          }
+        }
+      }
+      
+      return calendarData.join(',');
+    } catch (e) {
+      debugPrint('Error generating calendar data: $e');
+      return '';
     }
   }
 
