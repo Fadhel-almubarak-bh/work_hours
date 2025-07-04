@@ -1224,31 +1224,42 @@ class HiveDb {
         }
       }
 
-      // Calculate overtime
+      // Calculate overtime and remaining information
       final overtimeMinutes = totalWorkedMinutes - totalExpectedMinutes;
-      final isAhead = overtimeMinutes >= 0;
-      debugPrint("🔍 [WIDGET_DEBUG] Calculated total expected minutes: $totalExpectedMinutes");
-      debugPrint("🔍 [WIDGET_DEBUG] Calculated total worked minutes: $totalWorkedMinutes");
-      debugPrint("🔍 [WIDGET_DEBUG] Calculated overtime minutes: $overtimeMinutes");
-
-      // Calculate remaining
       final remainingMinutes = totalExpectedMinutes - totalWorkedMinutes;
-      final remainingText = "${_formatDurationForWidgetDb(remainingMinutes)}";
-
-      // Format strings for the widget
-      final overtimeText = "Overtime: ${_formatDurationForWidgetDb(overtimeMinutes)}";
-      final expectedHours = totalExpectedMinutes ~/ 60;
-      final expectedMinutes = totalExpectedMinutes % 60;
-      final actualHours = totalWorkedMinutes ~/ 60;
-      final actualMinutes = totalWorkedMinutes % 60;
-      final expectedVsActual = "Expected: ${expectedHours}h ${expectedMinutes}m / Actual: ${actualHours}h ${actualMinutes}m";
+      
+      // Format overtime and remaining text
+      final overtimeText = overtimeMinutes >= 0 
+          ? "Overtime: +${(overtimeMinutes / 60).floor()}h ${overtimeMinutes % 60}m"
+          : "Overtime: ${(overtimeMinutes / 60).floor()}h ${overtimeMinutes.abs() % 60}m";
+      
+      final remainingText = remainingMinutes >= 0 
+          ? "+${(remainingMinutes / 60).floor()}h ${remainingMinutes % 60}m"
+          : "${(remainingMinutes / 60).floor()}h ${remainingMinutes.abs() % 60}m";
+      
+      // Calculate gauge progress (0.0 to 1.0 for -20h to +20h range)
+      final maxGaugeHours = 20.0;
+      final overtimeHours = overtimeMinutes / 60.0;
+      final clampedOvertimeHours = overtimeHours.clamp(-maxGaugeHours, maxGaugeHours);
+      final gaugeProgress = (clampedOvertimeHours + maxGaugeHours) / (2 * maxGaugeHours);
+      
+      // Format gauge text
+      final gaugeText = overtimeHours >= 0 
+          ? "+${overtimeHours.toStringAsFixed(1)}h"
+          : "${overtimeHours.toStringAsFixed(1)}h";
+      
+      // Determine gauge color
+      final gaugeColor = overtimeHours >= 0 ? 'green' : 'red';
+      
+      final expectedVsActual = "Expected: ${(totalExpectedMinutes / 60).floor()}h ${totalExpectedMinutes % 60}m / Actual: ${(totalWorkedMinutes / 60).floor()}h ${totalWorkedMinutes % 60}m";
       final workDaysText = "Work Days: ${regularWorkDays + extraWorkDays}";
       final offDaysText = "Off Days: $offDays";
-      final statusMessage = isAhead
-          ? "You are ahead of schedule!"
+      final isAhead = overtimeMinutes >= 0;
+      final statusMessage = isAhead 
+          ? "You are ahead of schedule"
           : "You are behind schedule";
 
-      // Save extended data for widget
+      // Save extended widget data
       await HomeWidget.saveWidgetData<String>('_currentMonthName', currentMonthName);
       await HomeWidget.saveWidgetData<String>('_overtimeText', overtimeText);
       await HomeWidget.saveWidgetData<String>('_remainingText', remainingText);
@@ -1256,7 +1267,21 @@ class HiveDb {
       await HomeWidget.saveWidgetData<String>('_workDaysText', workDaysText);
       await HomeWidget.saveWidgetData<String>('_offDaysText', offDaysText);
       await HomeWidget.saveWidgetData<String>('_statusMessage', statusMessage);
-      await HomeWidget.saveWidgetData<int>('_overtimeColor', isAhead ? 1 : 0); // 1 = green, 0 = red
+      await HomeWidget.saveWidgetData<String>('_overtimeColor', gaugeColor);
+      
+      // Save overtime data for gauge
+      await HomeWidget.saveWidgetData<int>('_overtimeMinutes', overtimeMinutes);
+      await HomeWidget.saveWidgetData<double>('_gaugeProgress', gaugeProgress);
+      await HomeWidget.saveWidgetData<String>('_gaugeText', gaugeText);
+      await HomeWidget.saveWidgetData<String>('_gaugeColor', gaugeColor);
+      
+      // Save additional data needed by the widget
+      await HomeWidget.saveWidgetData<int>('_totalMinutesWorked', totalWorkedMinutes);
+      await HomeWidget.saveWidgetData<int>('_expectedMinutesUntilToday', totalExpectedMinutes);
+      
+      debugPrint("Saving additional widget data:");
+      debugPrint("Total Minutes Worked: $totalWorkedMinutes");
+      debugPrint("Expected Minutes Until Today: $totalExpectedMinutes");
 
       // Save salary data for widget
       try {
@@ -1303,7 +1328,7 @@ class HiveDb {
       debugPrint("Work Days: $workDaysText");
       debugPrint("Off Days: $offDaysText");
       debugPrint("Status Message: $statusMessage");
-      debugPrint("Overtime Color: ${isAhead ? 'green' : 'red'}");
+      debugPrint("Overtime Color: $gaugeColor");
 
       // Trigger widget update
       await HomeWidget.updateWidget(

@@ -193,6 +193,96 @@
                     android:layout_marginStart="4dp" />
             </LinearLayout>
 
+            <!-- Overtime Gauge -->
+            <FrameLayout
+                android:id="@+id/overtime_gauge_container"
+                android:layout_width="160dp"
+                android:layout_height="160dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/gauge_container_background">
+
+                <!-- Background Circle with Shadow -->
+                <ImageView
+                    android:id="@+id/gauge_background_circle"
+                    android:layout_width="140dp"
+                    android:layout_height="140dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/gauge_background_circle"
+                    android:scaleType="fitXY" />
+
+                <!-- Progress Arc Container -->
+                <FrameLayout
+                    android:id="@+id/gauge_progress_container"
+                    android:layout_width="140dp"
+                    android:layout_height="140dp"
+                    android:layout_gravity="center">
+
+                    <!-- Progress Arc - Gray (default) -->
+                    <ImageView
+                        android:id="@+id/gauge_progress_gray"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:src="@drawable/gauge_progress_arc_gray"
+                        android:scaleType="fitXY"
+                        android:visibility="visible" />
+
+                    <!-- Progress Arc - Green -->
+                    <ImageView
+                        android:id="@+id/gauge_progress_green"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:src="@drawable/gauge_progress_arc_green"
+                        android:scaleType="fitXY"
+                        android:visibility="gone" />
+
+                    <!-- Progress Arc - Red -->
+                    <ImageView
+                        android:id="@+id/gauge_progress_red"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:src="@drawable/gauge_progress_arc_red"
+                        android:scaleType="fitXY"
+                        android:visibility="gone" />
+
+                </FrameLayout>
+
+                <!-- Center Content -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:background="@drawable/gauge_center_background"
+                    android:padding="12dp">
+
+                    <!-- Main Value -->
+                    <TextView
+                        android:id="@+id/gauge_main_value"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0h"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        android:textColor="@android:color/black"
+                        android:gravity="center" />
+
+                    <!-- Progress Text -->
+                    <TextView
+                        android:id="@+id/gauge_progress_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0h / 0h"
+                        android:textSize="11sp"
+                        android:textColor="@android:color/darker_gray"
+                        android:gravity="center"
+                        android:layout_marginTop="2dp" />
+
+                </LinearLayout>
+
+            </FrameLayout>
+
             <!-- Today's Earnings Label/Value -->
             <LinearLayout
                 android:layout_width="match_parent"

@@ -277,6 +277,9 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.tv_overtime_label, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_overtime_value, android.view.View.GONE)
         
+        // Hide overtime gauge for home screen
+        views.setViewVisibility(R.id.overtime_gauge_container, android.view.View.GONE)
+        
         // Hide earnings labels/values for home screen
         views.setViewVisibility(R.id.tv_today_earnings_label, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_today_earnings_value, android.view.View.GONE)
@@ -298,6 +301,9 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.tv_remaining_value, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_overtime_label, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_overtime_value, android.view.View.GONE)
+        
+        // Hide overtime gauge for history tab
+        views.setViewVisibility(R.id.overtime_gauge_container, android.view.View.GONE)
         
         // Hide earnings labels/values
         views.setViewVisibility(R.id.tv_today_earnings_label, android.view.View.GONE)
@@ -324,6 +330,9 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.tv_overtime_label, android.view.View.VISIBLE)
         views.setViewVisibility(R.id.tv_overtime_value, android.view.View.VISIBLE)
 
+        // Show overtime gauge
+        views.setViewVisibility(R.id.overtime_gauge_container, android.view.View.VISIBLE)
+
         // Hide earnings labels/values for summary tab
         views.setViewVisibility(R.id.tv_today_earnings_label, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_today_earnings_value, android.view.View.GONE)
@@ -334,20 +343,111 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.mini_calendar_container, android.view.View.GONE)
 
         try {
-            val prefs = HomeWidgetPlugin.getData(context)
+            val widgetPrefs = HomeWidgetPlugin.getData(context)
             
-            val remainingText = prefs.getString("_remainingText", "--h --m")
-            val overtimeText = prefs.getString("_overtimeText", "--h --m")
+            val remainingText = widgetPrefs.getString("_remainingText", "--h --m")
+            val overtimeText = widgetPrefs.getString("_overtimeText", "--h --m")
+            
+            // Get gauge data
+            val gaugeProgress = widgetPrefs.getLong("_gaugeProgress", 50L).toFloat() / 100f
+            val gaugeText = widgetPrefs.getString("_gaugeText", "0h")
+            val gaugeColor = widgetPrefs.getString("_gaugeColor", "gray")
             
             Log.d(TAG, "[home_widget] Retrieved remainingText: '$remainingText'")
             Log.d(TAG, "[home_widget] Retrieved overtimeText: '$overtimeText'")
+            Log.d(TAG, "[home_widget] Retrieved gaugeProgress: $gaugeProgress")
+            Log.d(TAG, "[home_widget] Retrieved gaugeText: '$gaugeText'")
+            Log.d(TAG, "[home_widget] Retrieved gaugeColor: '$gaugeColor'")
             
             views.setTextViewText(R.id.tv_remaining_value, remainingText)
             views.setTextViewText(R.id.tv_overtime_value, overtimeText)
+            
+            // Update gauge with new design
+            views.setTextViewText(R.id.gauge_main_value, gaugeText)
+            
+            // Get background color for dynamic color adjustment
+            val settingsPrefs = context.getSharedPreferences("WidgetPrefs", Context.MODE_PRIVATE)
+            val backgroundColor = settingsPrefs.getString("backgroundColor", "white") ?: "white"
+            val isDarkBg = backgroundColor == "black" || backgroundColor == "blue" || backgroundColor == "green"
+            
+            // Set gauge text color based on gauge status and background
+            val gaugeTextColor = when (gaugeColor) {
+                "green" -> if (isDarkBg) Color.parseColor("#81C784") else Color.parseColor("#4CAF50")
+                "red" -> if (isDarkBg) Color.parseColor("#EF5350") else Color.parseColor("#FF5722")
+                else -> if (isDarkBg) Color.parseColor("#BDBDBD") else Color.parseColor("#9E9E9E")
+            }
+            views.setInt(R.id.gauge_main_value, "setTextColor", gaugeTextColor)
+            
+            // Calculate progress text (worked hours / expected hours)
+            val totalMinutesWorked = widgetPrefs.getInt("_totalMinutesWorked", 0).toLong()
+            val expectedMinutesUntilToday = widgetPrefs.getInt("_expectedMinutesUntilToday", 0).toLong()
+            
+            Log.d(TAG, "[home_widget] Retrieved totalMinutesWorked: $totalMinutesWorked")
+            Log.d(TAG, "[home_widget] Retrieved expectedMinutesUntilToday: $expectedMinutesUntilToday")
+            
+            val workedHours = totalMinutesWorked / 60.0
+            val expectedHours = expectedMinutesUntilToday / 60.0
+            
+            val progressText = if (expectedHours > 0) {
+                "${String.format("%.1f", workedHours)}h / ${String.format("%.1f", expectedHours)}h"
+            } else {
+                "0h / 0h"
+            }
+            views.setTextViewText(R.id.gauge_progress_text, progressText)
+            
+            // Show/hide the appropriate progress arc based on color and background
+            when (gaugeColor) {
+                "green" -> {
+                    views.setViewVisibility(R.id.gauge_progress_gray, android.view.View.GONE)
+                    views.setViewVisibility(R.id.gauge_progress_green, android.view.View.VISIBLE)
+                    views.setViewVisibility(R.id.gauge_progress_red, android.view.View.GONE)
+                    
+                    // Set green progress drawable based on background
+                    val greenProgressDrawable = if (isDarkBg) {
+                        R.drawable.gauge_progress_green_dark
+                    } else {
+                        R.drawable.gauge_progress_green_light
+                    }
+                    views.setImageViewResource(R.id.gauge_progress_green, greenProgressDrawable)
+                }
+                "red" -> {
+                    views.setViewVisibility(R.id.gauge_progress_gray, android.view.View.GONE)
+                    views.setViewVisibility(R.id.gauge_progress_green, android.view.View.GONE)
+                    views.setViewVisibility(R.id.gauge_progress_red, android.view.View.VISIBLE)
+                    
+                    // Set red progress drawable based on background
+                    val redProgressDrawable = if (isDarkBg) {
+                        R.drawable.gauge_progress_red_dark
+                    } else {
+                        R.drawable.gauge_progress_red_light
+                    }
+                    views.setImageViewResource(R.id.gauge_progress_red, redProgressDrawable)
+                }
+                else -> {
+                    views.setViewVisibility(R.id.gauge_progress_gray, android.view.View.VISIBLE)
+                    views.setViewVisibility(R.id.gauge_progress_green, android.view.View.GONE)
+                    views.setViewVisibility(R.id.gauge_progress_red, android.view.View.GONE)
+                    
+                    // Set gray progress drawable based on background
+                    val grayProgressDrawable = if (isDarkBg) {
+                        R.drawable.gauge_progress_gray_dark
+                    } else {
+                        R.drawable.gauge_progress_gray_light
+                    }
+                    views.setImageViewResource(R.id.gauge_progress_gray, grayProgressDrawable)
+                }
+            }
+            
         } catch (e: Exception) {
             Log.e(TAG, "[home_widget] Error updating summary tab content: ${e.message}", e)
             views.setTextViewText(R.id.tv_remaining_value, "--h --m")
             views.setTextViewText(R.id.tv_overtime_value, "--h --m")
+            views.setTextViewText(R.id.gauge_main_value, "0h")
+            views.setTextViewText(R.id.gauge_progress_text, "0h / 0h")
+            views.setViewVisibility(R.id.gauge_progress_gray, android.view.View.VISIBLE)
+            views.setViewVisibility(R.id.gauge_progress_green, android.view.View.GONE)
+            views.setViewVisibility(R.id.gauge_progress_red, android.view.View.GONE)
+            // No need to set trimPathEnd for the new drawable approach
         }
     }
     
@@ -363,6 +463,9 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.tv_overtime_label, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_overtime_value, android.view.View.GONE)
 
+        // Hide overtime gauge for salary tab
+        views.setViewVisibility(R.id.overtime_gauge_container, android.view.View.GONE)
+
         // Show today's earnings and monthly earnings labels/values
         views.setViewVisibility(R.id.tv_today_earnings_label, android.view.View.VISIBLE)
         views.setViewVisibility(R.id.tv_today_earnings_value, android.view.View.VISIBLE)
@@ -373,9 +476,9 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.mini_calendar_container, android.view.View.GONE)
 
         try {
-            val prefs = HomeWidgetPlugin.getData(context)
-            val todayEarnings = prefs.getString("_todayEarnings", "$0.00")
-            val monthlyEarnings = prefs.getString("_monthlyEarnings", "$0.00")
+            val widgetPrefs = HomeWidgetPlugin.getData(context)
+            val todayEarnings = widgetPrefs.getString("_todayEarnings", "$0.00")
+            val monthlyEarnings = widgetPrefs.getString("_monthlyEarnings", "$0.00")
             
             Log.d(TAG, "[home_widget] Retrieved todayEarnings: '$todayEarnings'")
             Log.d(TAG, "[home_widget] Retrieved monthlyEarnings: '$monthlyEarnings'")
@@ -400,6 +503,9 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.tv_remaining_value, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_overtime_label, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_overtime_value, android.view.View.GONE)
+        
+        // Hide overtime gauge
+        views.setViewVisibility(R.id.overtime_gauge_container, android.view.View.GONE)
         
         // Hide earnings labels/values
         views.setViewVisibility(R.id.tv_today_earnings_label, android.view.View.GONE)
@@ -601,6 +707,16 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setInt(R.id.tv_monthly_earnings_label, "setTextColor", textColor)
         views.setInt(R.id.tv_monthly_earnings_value, "setTextColor", textColor)
         views.setInt(R.id.tv_calendar_header, "setTextColor", textColor)
+        views.setInt(R.id.gauge_progress_text, "setTextColor", textColor)
+        
+        // Update gauge background circle drawable based on background
+        val gaugeBgDrawable = when (backgroundColor) {
+            "black" -> R.drawable.gauge_background_circle_black
+            "blue" -> R.drawable.gauge_background_circle_blue
+            "green" -> R.drawable.gauge_background_circle_green
+            else -> R.drawable.gauge_background_circle_white
+        }
+        views.setImageViewResource(R.id.gauge_background_circle, gaugeBgDrawable)
         
         // Update calendar day text colors
         val dayIds = arrayOf(

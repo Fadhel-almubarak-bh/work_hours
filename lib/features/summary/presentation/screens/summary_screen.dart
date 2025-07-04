@@ -55,6 +55,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
     _summaryFuture = _calculateSummary();
     _checkClockInStatus();
     _startLiveUpdates();
+    
+    // Update widget data when summary screen is loaded
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateWidgetData();
+    });
   }
 
   @override
@@ -78,6 +83,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
         setState(() {
           // Force rebuild of the overtime gauge
         });
+        // Update widget every 30 seconds when clocked in
+        if (timer.tick % 30 == 0) {
+          _updateWidgetData();
+        }
       } else {
         // Check if clock in status changed
         final now = DateTime.now();
@@ -89,6 +98,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
         if (newClockInStatus != _isCurrentlyClockedIn) {
           _isCurrentlyClockedIn = newClockInStatus;
           setState(() {});
+          // Update widget when clock in status changes
+          _updateWidgetData();
         }
       }
     });
@@ -303,7 +314,20 @@ class _SummaryScreenState extends State<SummaryScreen> {
       // Update clock in status and restart live updates
       _checkClockInStatus();
       _startLiveUpdates();
+      
+      // Update widget with latest data
+      _updateWidgetData();
     });
+  }
+  
+  Future<void> _updateWidgetData() async {
+    try {
+      debugPrint('[summary_screen] 🔄 Updating widget data from summary screen');
+      await HiveDb.updateWidgetWithOvertimeInfo();
+      debugPrint('[summary_screen] ✅ Widget data updated successfully');
+    } catch (e) {
+      debugPrint('[summary_screen] ❌ Error updating widget data: $e');
+    }
   }
 
   String formatDuration(int totalMinutes) {
