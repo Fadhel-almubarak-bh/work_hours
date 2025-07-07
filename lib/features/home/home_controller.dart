@@ -53,10 +53,11 @@ class HomeController extends ChangeNotifier {
     }
   }
 
-  Future<void> clockOut() async {
+  Future<void> clockOut([DateTime? customTime]) async {
     try {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
+      final time = customTime ?? DateTime.now();
+      debugPrint('[clockout] HomeController.clockOut called with time: $time');
+      final today = DateTime(time.year, time.month, time.day);
       final entry = await _repository.getWorkEntry(today);
       
       if (entry == null) {
@@ -64,9 +65,10 @@ class HomeController extends ChangeNotifier {
       }
       
       await _repository.saveWorkEntry(entry.copyWith(
-        clockOut: now,
-        duration: now.difference(entry.clockIn!).inMinutes,
+        clockOut: time,
+        duration: time.difference(entry.clockIn!).inMinutes,
       ));
+      debugPrint('[clockout] HomeController.clockOut: saveWorkEntry completed');
       notifyListeners();
     } catch (e) {
       debugPrint('Error in clockOut: $e');

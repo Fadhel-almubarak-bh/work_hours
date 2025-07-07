@@ -80,6 +80,18 @@ class _WorkHoursScreenState extends State<WorkHoursScreen>
         if (!isCustomTimeSelected) {
           currentTimeString = DateFormat('HH:mm:ss').format(now);
           currentDateString = DateFormat('yyyy-MM-dd').format(now);
+        } else if (customTime != null) {
+          // If custom time is selected, keep showing it with seconds
+          final customDateTime = DateTime(
+            now.year,
+            now.month,
+            now.day,
+            customTime!.hour,
+            customTime!.minute,
+            now.second, // Keep current seconds for live update effect
+          );
+          currentTimeString = "${DateFormat('HH:mm').format(customDateTime)}:${now.second.toString().padLeft(2, '0')} (custom)";
+          currentDateString = DateFormat('yyyy-MM-dd').format(now);
         }
       });
     }
@@ -143,198 +155,16 @@ class _WorkHoursScreenState extends State<WorkHoursScreen>
   }
 
   Future<TimeOfDay?> _showCustomTimePicker(BuildContext context) async {
-    return showDialog<TimeOfDay>(
+    debugPrint('[time_picker] Opening time picker');
+    // Use current custom time as initial time if available, otherwise use current time
+    final initialTime = customTime ?? TimeOfDay.now();
+    debugPrint('[time_picker] Initial time: $initialTime');
+    final result = await showTimePicker(
       context: context,
-      builder: (BuildContext context) {
-        final now = TimeOfDay.now();
-        int hour = now.hour;
-        int minute = now.minute;
-
-        return StatefulBuilder(builder: (context, setState) {
-          final screenWidth = MediaQuery.of(context).size.width;
-          final isSmallScreen = screenWidth < 360;
-
-          return Dialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16.0),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Select Time',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Time display
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
-                        style: isSmallScreen
-                            ? Theme.of(context)
-                                .textTheme
-                                .headlineSmall
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onPrimaryContainer,
-                                )
-                            : Theme.of(context)
-                                .textTheme
-                                .headlineMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onPrimaryContainer,
-                                ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Hour and minute selectors
-                    LayoutBuilder(builder: (context, constraints) {
-                      return Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Hour selector
-                          Flexible(
-                            child: Column(
-                              children: [
-                                const Text('Hour'),
-                                const SizedBox(height: 8),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(
-                                          Icons.remove_circle_outline),
-                                      constraints: BoxConstraints.tightFor(
-                                          width: isSmallScreen ? 32 : 40,
-                                          height: isSmallScreen ? 32 : 40),
-                                      padding: EdgeInsets.zero,
-                                      onPressed: () {
-                                        setState(() {
-                                          hour = (hour - 1 + 24) % 24;
-                                        });
-                                      },
-                                    ),
-                                    Text(
-                                      hour.toString().padLeft(2, '0'),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge,
-                                    ),
-                                    IconButton(
-                                      icon:
-                                          const Icon(Icons.add_circle_outline),
-                                      constraints: BoxConstraints.tightFor(
-                                          width: isSmallScreen ? 32 : 40,
-                                          height: isSmallScreen ? 32 : 40),
-                                      padding: EdgeInsets.zero,
-                                      onPressed: () {
-                                        setState(() {
-                                          hour = (hour + 1) % 24;
-                                        });
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          SizedBox(width: isSmallScreen ? 8 : 16),
-
-                          // Minute selector
-                          Flexible(
-                            child: Column(
-                              children: [
-                                const Text('Minute'),
-                                const SizedBox(height: 8),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(
-                                          Icons.remove_circle_outline),
-                                      constraints: BoxConstraints.tightFor(
-                                          width: isSmallScreen ? 32 : 40,
-                                          height: isSmallScreen ? 32 : 40),
-                                      padding: EdgeInsets.zero,
-                                      onPressed: () {
-                                        setState(() {
-                                          minute = (minute - 1 + 60) % 60;
-                                        });
-                                      },
-                                    ),
-                                    Text(
-                                      minute.toString().padLeft(2, '0'),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge,
-                                    ),
-                                    IconButton(
-                                      icon:
-                                          const Icon(Icons.add_circle_outline),
-                                      constraints: BoxConstraints.tightFor(
-                                          width: isSmallScreen ? 32 : 40,
-                                          height: isSmallScreen ? 32 : 40),
-                                      padding: EdgeInsets.zero,
-                                      onPressed: () {
-                                        setState(() {
-                                          minute = (minute + 1) % 60;
-                                        });
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      );
-                    }),
-
-                    const SizedBox(height: 16),
-
-                    // Buttons
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Cancel'),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () {
-                            Navigator.pop(
-                                context, TimeOfDay(hour: hour, minute: minute));
-                          },
-                          child: const Text('Set Time'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        });
-      },
+      initialTime: initialTime,
     );
+    debugPrint('[time_picker] Time picker result: $result');
+    return result;
   }
 
   @override
@@ -407,11 +237,19 @@ class _WorkHoursScreenState extends State<WorkHoursScreen>
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 16, vertical: 12),
                                   decoration: BoxDecoration(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .primaryContainer
-                                        .withOpacity(0.3),
+                                    color: isCustomTimeSelected
+                                        ? Colors.orange.withOpacity(0.2)
+                                        : Theme.of(context)
+                                            .colorScheme
+                                            .primaryContainer
+                                            .withOpacity(0.3),
                                     borderRadius: BorderRadius.circular(12),
+                                    border: isCustomTimeSelected
+                                        ? Border.all(
+                                            color: Colors.orange.withOpacity(0.5),
+                                            width: 2,
+                                          )
+                                        : null,
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -442,10 +280,13 @@ class _WorkHoursScreenState extends State<WorkHoursScreen>
                                             width: 36, height: 36),
                                         padding: EdgeInsets.zero,
                                         onPressed: () async {
+                                          debugPrint('[time_button] Time selection button pressed');
                                           final pickedTime =
                                               await _showCustomTimePicker(
                                                   context);
+                                          debugPrint('[time_button] Picked time: $pickedTime');
                                           if (pickedTime != null) {
+                                            debugPrint('[time_button] Processing selected time: ${pickedTime.hour}:${pickedTime.minute}');
                                             setState(() {
                                               isCustomTimeSelected = true;
                                               customTime = pickedTime;
@@ -467,6 +308,9 @@ class _WorkHoursScreenState extends State<WorkHoursScreen>
                                               // Store for later use
                                               selectedDate = selectedTime;
                                             });
+                                            debugPrint('[time_button] Updated currentTimeString to: $currentTimeString');
+                                          } else {
+                                            debugPrint('[time_button] No time selected (user cancelled)');
                                           }
                                         },
                                       ),
@@ -498,6 +342,17 @@ class _WorkHoursScreenState extends State<WorkHoursScreen>
                                     ],
                                   ),
                                 ),
+                                if (isCustomTimeSelected) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Custom time selected',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.orange[700],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -704,12 +559,16 @@ class _WorkHoursScreenState extends State<WorkHoursScreen>
   Future<void> _handleClockIn() async {
     try {
       debugPrint('[clockin] _handleClockIn called');
+      debugPrint('[clockin] selectedDate: $selectedDate');
+      debugPrint('[clockin] isCustomTimeSelected: $isCustomTimeSelected');
+      debugPrint('[clockin] customTime: $customTime');
+      
       // Get time to use (either current or custom selected)
       DateTime usedTime;
 
       if (selectedDate != null) {
         usedTime = selectedDate!;
-        debugPrint('[clockin] Using custom time for clock in: $usedTime');
+        debugPrint('[clockin] Using selectedDate for clock in: $usedTime');
       } else if (isCustomTimeSelected && customTime != null) {
         final now = DateTime.now();
         usedTime = DateTime(
@@ -753,13 +612,50 @@ class _WorkHoursScreenState extends State<WorkHoursScreen>
 
   Future<void> _handleClockOut() async {
     try {
-      await _controller.clockOut();
+      debugPrint('[clockout] _handleClockOut called');
+      debugPrint('[clockout] selectedDate: $selectedDate');
+      debugPrint('[clockout] isCustomTimeSelected: $isCustomTimeSelected');
+      debugPrint('[clockout] customTime: $customTime');
+      
+      // Get time to use (either current or custom selected)
+      DateTime usedTime;
+
+      if (selectedDate != null) {
+        usedTime = selectedDate!;
+        debugPrint('[clockout] Using selectedDate for clock out: $usedTime');
+      } else if (isCustomTimeSelected && customTime != null) {
+        final now = DateTime.now();
+        usedTime = DateTime(
+          now.year,
+          now.month,
+          now.day,
+          customTime!.hour,
+          customTime!.minute,
+        );
+        debugPrint('[clockout] Using custom time for clock out: $usedTime');
+      } else {
+        usedTime = DateTime.now();
+        debugPrint('[clockout] Using current time for clock out: $usedTime');
+      }
+
+      await _controller.clockOut(usedTime);
+      debugPrint('[clockout] _controller.clockOut completed');
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Clocked out successfully')),
         );
+        setState(() {
+          selectedDate = null;
+          isCustomTimeSelected = false;
+          customTime = null;
+          final now = DateTime.now();
+          currentTimeString = DateFormat('HH:mm:ss').format(now);
+          currentDateString = DateFormat('yyyy-MM-dd').format(now);
+        });
       }
     } catch (e) {
+      debugPrint('[clockout] Error in _handleClockOut: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error clocking out: $e')),

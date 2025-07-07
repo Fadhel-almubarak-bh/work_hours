@@ -48,6 +48,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
   final WorkHoursRepository _repository = WorkHoursRepository();
   Timer? _liveUpdateTimer;
   bool _isCurrentlyClockedIn = false;
+  
+  // Cache for weekly data to prevent recalculation
+  Map<String, dynamic>? _cachedWeeklyData;
+  DateTime? _lastWeeklyDataUpdate;
+  static const Duration _weeklyDataCacheDuration = Duration(minutes: 5);
 
   @override
   void initState() {
@@ -55,11 +60,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
     _summaryFuture = _calculateSummary();
     _checkClockInStatus();
     _startLiveUpdates();
-    
-    // Update widget data when summary screen is loaded
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _updateWidgetData();
-    });
+    // Invalidate cache on init to ensure fresh data
+    _invalidateWeeklyCache();
   }
 
   @override
@@ -80,12 +82,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
     _liveUpdateTimer?.cancel();
     _liveUpdateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_isCurrentlyClockedIn) {
-        setState(() {
-          // Force rebuild of the overtime gauge
-        });
-        // Update widget every 30 seconds when clocked in
-        if (timer.tick % 30 == 0) {
-          _updateWidgetData();
+        // Only rebuild the overtime gauge, not the entire screen
+        if (mounted) {
+          setState(() {
+            // This will only rebuild the overtime gauge which uses _calculateLiveOvertime()
+          });
         }
       } else {
         // Check if clock in status changed
@@ -97,9 +98,11 @@ class _SummaryScreenState extends State<SummaryScreen> {
         
         if (newClockInStatus != _isCurrentlyClockedIn) {
           _isCurrentlyClockedIn = newClockInStatus;
-          setState(() {});
-          // Update widget when clock in status changes
-          _updateWidgetData();
+          // Invalidate cache when clock status changes
+          _invalidateWeeklyCache();
+          if (mounted) {
+            setState(() {});
+          }
         }
       }
     });
@@ -311,23 +314,18 @@ class _SummaryScreenState extends State<SummaryScreen> {
  
       _summaryFuture = _calculateSummary();
       
+      // Invalidate weekly data cache
+      _invalidateWeeklyCache();
+      
       // Update clock in status and restart live updates
       _checkClockInStatus();
       _startLiveUpdates();
-      
-      // Update widget with latest data
-      _updateWidgetData();
     });
   }
-  
-  Future<void> _updateWidgetData() async {
-    try {
-      debugPrint('[summary_screen] 🔄 Updating widget data from summary screen');
-      await HiveDb.updateWidgetWithOvertimeInfo();
-      debugPrint('[summary_screen] ✅ Widget data updated successfully');
-    } catch (e) {
-      debugPrint('[summary_screen] ❌ Error updating widget data: $e');
-    }
+
+  void _invalidateWeeklyCache() {
+    _cachedWeeklyData = null;
+    _lastWeeklyDataUpdate = null;
   }
 
   String formatDuration(int totalMinutes) {
@@ -1246,47 +1244,41 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Widget _buildWeeklyBarChart() {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _getWeeklyWorkHours(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    // Use synchronous calculation instead of FutureBuilder to avoid constant rebuilding
+    final data = _getWeeklyWorkHoursSync();
+    final List<BarChartGroupData> barGroups = [];
 
-        final data = snapshot.data ?? {};
-        final List<BarChartGroupData> barGroups = [];
+    final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final dailyTarget = HiveDb.getDailyTargetMinutes() / 60;
 
-        final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        final dailyTarget = HiveDb.getDailyTargetMinutes() / 60;
+    // Find the maximum hours worked in a day to set appropriate Y-axis scale
+    double maxHours = dailyTarget;
+    for (int i = 0; i < 7; i++) {
+      final double hours = (data[i.toString()] ?? 0.0) / 60.0;
+      if (hours > maxHours) maxHours = hours;
+    }
+    // Set max Y to either 150% of daily target or 150% of max hours, whichever is greater
+    final maxY = (maxHours > dailyTarget ? maxHours : dailyTarget) * 1.5;
 
-        // Find the maximum hours worked in a day to set appropriate Y-axis scale
-        double maxHours = dailyTarget;
-        for (int i = 0; i < 7; i++) {
-          final double hours = (data[i.toString()] ?? 0.0) / 60.0;
-          if (hours > maxHours) maxHours = hours;
-        }
-        // Set max Y to either 150% of daily target or 150% of max hours, whichever is greater
-        final maxY = (maxHours > dailyTarget ? maxHours : dailyTarget) * 1.5;
+    for (int i = 0; i < 7; i++) {
+      final double hours = (data[i.toString()] ?? 0.0) / 60.0;
 
-        for (int i = 0; i < 7; i++) {
-          final double hours = (data[i.toString()] ?? 0.0) / 60.0;
-
-          barGroups.add(
-            BarChartGroupData(
-              x: i,
-              barRods: [
-                BarChartRodData(
-                  toY: hours,
-                  color: hours >= dailyTarget
-                      ? Colors.green
-                      : (hours > 0 ? AppColors.primaryLight : Colors.grey[300]),
-                  width: 20,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ],
+      barGroups.add(
+        BarChartGroupData(
+          x: i,
+          barRods: [
+            BarChartRodData(
+              toY: hours,
+              color: hours >= dailyTarget
+                  ? Colors.green
+                  : (hours > 0 ? AppColors.primaryLight : Colors.grey[300]),
+              width: 20,
+              borderRadius: BorderRadius.circular(4),
             ),
-          );
-        }
+          ],
+        ),
+      );
+    }
 
         return Card(
           elevation: 4,
@@ -1294,13 +1286,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
             padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
+              children: [
+                Text(
                   'Weekly Work Hours',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
-        Text(
+                Text(
                   'Hours worked each day this week',
                   style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
@@ -1322,9 +1314,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
                                 padding: const EdgeInsets.only(top: 8.0),
                                 child: Text(
                                   weekdays[value.toInt()],
-          style: const TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 12,
-            fontWeight: FontWeight.bold,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               );
@@ -1385,8 +1377,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
             ),
           ),
         );
-      },
-    );
   }
 
   Widget _legendItem(Color color, String label) {
@@ -1406,8 +1396,32 @@ class _SummaryScreenState extends State<SummaryScreen> {
     );
   }
 
-  Future<Map<String, dynamic>> _getWeeklyWorkHours() async {
+  Map<String, dynamic> _getWeeklyWorkHoursSync() {
     final now = DateTime.now();
+    
+    // Check if we have cached data that's still valid
+    if (_cachedWeeklyData != null && _lastWeeklyDataUpdate != null) {
+      final timeSinceLastUpdate = now.difference(_lastWeeklyDataUpdate!);
+      if (timeSinceLastUpdate < _weeklyDataCacheDuration) {
+        // Return cached data, but update today's entry if user is clocked in
+        if (_isCurrentlyClockedIn) {
+          final updatedData = Map<String, dynamic>.from(_cachedWeeklyData!);
+          final todayWeekday = now.weekday - 1;
+          final todayEntry = HiveDb.getDayEntry(now);
+          
+          if (todayEntry != null && todayEntry['in'] != null && todayEntry['out'] == null) {
+            final clockInTime = DateTime.parse(todayEntry['in']);
+            final currentDuration = now.difference(clockInTime).inMinutes;
+            updatedData[todayWeekday.toString()] = currentDuration;
+          }
+          
+          return updatedData;
+        }
+        return _cachedWeeklyData!;
+      }
+    }
+    
+    // Calculate fresh data
     final weekStart = now.subtract(Duration(days: now.weekday - 1));
     final weekEnd = weekStart.add(const Duration(days: 6));
 
@@ -1434,7 +1448,15 @@ class _SummaryScreenState extends State<SummaryScreen> {
       }
     }
 
+    // Cache the data
+    _cachedWeeklyData = weeklyHours;
+    _lastWeeklyDataUpdate = now;
+
     return weeklyHours;
+  }
+
+  Future<Map<String, dynamic>> _getWeeklyWorkHours() async {
+    return _getWeeklyWorkHoursSync();
   }
 
   Widget _buildLastMonthSummaryCard(Map<String, dynamic> summary, String lastMonthName) {
