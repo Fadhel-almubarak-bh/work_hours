@@ -38,23 +38,26 @@ class HomeController extends ChangeNotifier {
   Future<void> clockIn([DateTime? customTime]) async {
     try {
       final time = customTime ?? DateTime.now();
+      debugPrint('[clockin] HomeController.clockIn called with time: $time');
       await _repository.saveWorkEntry(WorkEntry(
         date: time,
         clockIn: time,
         duration: 0,
         isOffDay: false,
       ));
+      debugPrint('[clockin] HomeController.clockIn: saveWorkEntry completed');
       notifyListeners();
-    } catch (e) {
-      debugPrint('Error in clockIn: $e');
+    } catch (e, stack) {
+      debugPrint('[clockin] Error in HomeController.clockIn: $e\n$stack');
       rethrow;
     }
   }
 
-  Future<void> clockOut() async {
+  Future<void> clockOut([DateTime? customTime]) async {
     try {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
+      final time = customTime ?? DateTime.now();
+      debugPrint('[clockout] HomeController.clockOut called with time: $time');
+      final today = DateTime(time.year, time.month, time.day);
       final entry = await _repository.getWorkEntry(today);
       
       if (entry == null) {
@@ -62,9 +65,10 @@ class HomeController extends ChangeNotifier {
       }
       
       await _repository.saveWorkEntry(entry.copyWith(
-        clockOut: now,
-        duration: now.difference(entry.clockIn!).inMinutes,
+        clockOut: time,
+        duration: time.difference(entry.clockIn!).inMinutes,
       ));
+      debugPrint('[clockout] HomeController.clockOut: saveWorkEntry completed');
       notifyListeners();
     } catch (e) {
       debugPrint('Error in clockOut: $e');

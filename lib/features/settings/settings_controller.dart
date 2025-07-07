@@ -5,10 +5,12 @@ import '../../core/theme/theme_provider.dart';
 import '../../data/local/hive_db.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
 import '../../data/models/work_entry.dart';
+import '../../services/widget_service.dart';
 
 class SettingsController extends ChangeNotifier {
   final WorkHoursRepository _repository;
@@ -144,14 +146,6 @@ class SettingsController extends ChangeNotifier {
 
   Future<void> exportDataToExcel(BuildContext context) async {
     try {
-      final result = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save Excel File',
-        fileName: 'work_hours_export.xlsx',
-        type: FileType.custom,
-        allowedExtensions: ['xlsx'],
-      );
-
-      if (result != null) {
         final excel = Excel.createExcel();
         final sheet = excel.sheets.values.first;
 
@@ -183,17 +177,29 @@ class SettingsController extends ChangeNotifier {
           ]);
         }
 
-        // Save the file
+      // Encode the Excel file to bytes
         final bytes = excel.encode();
-        if (bytes != null) {
-          final file = File(result);
-          await file.writeAsBytes(bytes);
-          
+      if (bytes == null) {
+        throw Exception('Failed to encode Excel file');
+      }
+
+      // Convert List<int> to Uint8List
+      final uint8List = Uint8List.fromList(bytes);
+
+      // Save the file using FilePicker with bytes
+      final result = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Excel File',
+        fileName: 'work_hours_export.xlsx',
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+        bytes: uint8List, // Pass the Uint8List
+      );
+
+      if (result != null) {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Data exported successfully')),
             );
-          }
         }
       }
     } catch (e) {
@@ -822,6 +828,25 @@ class SettingsController extends ChangeNotifier {
                   }
                 },
                 child: const Text('Update Widget'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  try {
+                    await WidgetService.testClockInOut();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Clock in/out test completed')),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Test failed: $e')),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Test Clock In/Out'),
               ),
             ],
           ),

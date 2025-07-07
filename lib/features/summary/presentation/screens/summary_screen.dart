@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:syncfusion_flutter_charts/charts.dart' hide CornerStyle;
 import 'package:syncfusion_flutter_gauges/gauges.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'dart:async';
 import '../../../../data/local/hive_db.dart';
 import '../../../../data/repositories/work_hours_repository.dart';
 import '../../summary_controller.dart';
@@ -45,11 +46,131 @@ class _SummaryScreenState extends State<SummaryScreen> {
   bool _isCalculating = false;
   Future<Map<String, dynamic>>? _summaryFuture;
   final WorkHoursRepository _repository = WorkHoursRepository();
+  Timer? _liveUpdateTimer;
+  bool _isCurrentlyClockedIn = false;
+  
+  // Cache for weekly data to prevent recalculation
+  Map<String, dynamic>? _cachedWeeklyData;
+  DateTime? _lastWeeklyDataUpdate;
+  static const Duration _weeklyDataCacheDuration = Duration(minutes: 5);
 
   @override
   void initState() {
     super.initState();
     _summaryFuture = _calculateSummary();
+    _checkClockInStatus();
+    _startLiveUpdates();
+    // Invalidate cache on init to ensure fresh data
+    _invalidateWeeklyCache();
+  }
+
+  @override
+  void dispose() {
+    _liveUpdateTimer?.cancel();
+    super.dispose();
+  }
+
+  void _checkClockInStatus() {
+    final now = DateTime.now();
+    final todayEntry = HiveDb.getDayEntry(now);
+    _isCurrentlyClockedIn = todayEntry != null && 
+                           todayEntry['in'] != null && 
+                           todayEntry['out'] == null;
+  }
+
+  void _startLiveUpdates() {
+    _liveUpdateTimer?.cancel();
+    _liveUpdateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_isCurrentlyClockedIn) {
+        // Only rebuild the overtime gauge, not the entire screen
+        if (mounted) {
+          setState(() {
+            // This will only rebuild the overtime gauge which uses _calculateLiveOvertime()
+          });
+        }
+      } else {
+        // Check if clock in status changed
+        final now = DateTime.now();
+        final todayEntry = HiveDb.getDayEntry(now);
+        final newClockInStatus = todayEntry != null && 
+                                todayEntry['in'] != null && 
+                                todayEntry['out'] == null;
+        
+        if (newClockInStatus != _isCurrentlyClockedIn) {
+          _isCurrentlyClockedIn = newClockInStatus;
+          // Invalidate cache when clock status changes
+          _invalidateWeeklyCache();
+          if (mounted) {
+            setState(() {});
+          }
+        }
+      }
+    });
+  }
+
+  // New method to calculate live overtime including today's current progress
+  Map<String, dynamic> _calculateLiveOvertime() {
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1);
+    final today = DateTime(now.year, now.month, now.day);
+    final workDays = HiveDb.getWorkDays();
+    final dailyTargetMinutes = HiveDb.getDailyTargetMinutes();
+
+    int totalMinutesWorked = 0;
+    int expectedMinutesUntilToday = 0;
+    int configuredWorkDays = 0;
+    int workedDays = 0;
+    int offDays = 0;
+    int missedDays = 0;
+
+    for (var day = monthStart; day.isBefore(today.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+      final weekdayIndex = day.weekday - 1;
+      final bool isWorkDay = workDays[weekdayIndex];
+      final entry = HiveDb.getDayEntry(day);
+
+      if (isWorkDay) {
+        configuredWorkDays++;
+        expectedMinutesUntilToday += dailyTargetMinutes;
+
+        if (entry != null) {
+          if (entry['offDay'] == true) {
+            offDays++;
+            totalMinutesWorked += dailyTargetMinutes;
+          } else if (day.isAtSameMomentAs(today)) {
+            // Always add today's progress, whether clocked in or out
+            if (entry['in'] != null && entry['out'] == null) {
+              // Still clocked in, add live duration
+              workedDays++;
+              final clockInTime = DateTime.parse(entry['in']);
+              final currentDuration = now.difference(clockInTime).inMinutes;
+              totalMinutesWorked += currentDuration;
+            } else if (entry['duration'] != null) {
+              // Already clocked out, add saved duration
+              workedDays++;
+              totalMinutesWorked += (entry['duration'] as num).toInt();
+            }
+          } else if (entry['duration'] != null) {
+            workedDays++;
+            totalMinutesWorked += (entry['duration'] as num).toInt();
+          }
+        } else {
+          missedDays++;
+        }
+      }
+    }
+
+    final liveOvertimeMinutes = totalMinutesWorked - expectedMinutesUntilToday;
+
+    return {
+      'overtimeMinutes': liveOvertimeMinutes,
+      'totalMinutesWorked': totalMinutesWorked,
+      'expectedMinutesUntilToday': expectedMinutesUntilToday,
+      'configuredWorkDays': configuredWorkDays,
+      'workedDays': workedDays,
+      'offDays': offDays,
+      'missedDays': missedDays,
+      'isCurrentlyClockedIn': _isCurrentlyClockedIn,
+    };
   }
 
   Future<Map<String, dynamic>> _calculateSummary() async {
@@ -192,7 +313,19 @@ class _SummaryScreenState extends State<SummaryScreen> {
       final lastMonthOvertime = HiveDb.getLastMonthOvertime();
  
       _summaryFuture = _calculateSummary();
+      
+      // Invalidate weekly data cache
+      _invalidateWeeklyCache();
+      
+      // Update clock in status and restart live updates
+      _checkClockInStatus();
+      _startLiveUpdates();
     });
+  }
+
+  void _invalidateWeeklyCache() {
+    _cachedWeeklyData = null;
+    _lastWeeklyDataUpdate = null;
   }
 
   String formatDuration(int totalMinutes) {
@@ -624,11 +757,16 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Widget _buildOvertimeGaugeCard(Map<String, dynamic> summary) {
-    final overtimeMinutes = summary['overtimeMinutes'] ?? 0;
-    final monthlyTotal = summary['monthlyTotal'] ?? 0;
-    final currentMonthExpectedMinutes = summary['currentMonthExpectedMinutes'] ?? 0;
-    final monthlyWorkDays = summary['monthlyWorkDays'] ?? 0;
-    final monthlyOffDays = summary['monthlyOffDays'] ?? 0;
+    // Use live overtime calculation instead of summary data
+    final liveOvertime = _calculateLiveOvertime();
+    final overtimeMinutes = liveOvertime['overtimeMinutes'] ?? 0;
+    final totalMinutesWorked = liveOvertime['totalMinutesWorked'] ?? 0;
+    final expectedMinutesUntilToday = liveOvertime['expectedMinutesUntilToday'] ?? 0;
+    final configuredWorkDays = liveOvertime['configuredWorkDays'] ?? 0;
+    final workedDays = liveOvertime['workedDays'] ?? 0;
+    final offDays = liveOvertime['offDays'] ?? 0;
+    final missedDays = liveOvertime['missedDays'] ?? 0;
+    final isCurrentlyClockedIn = liveOvertime['isCurrentlyClockedIn'] ?? false;
 
     // Calculate overtime in hours for the gauge
     final overtimeHours = overtimeMinutes / 60.0;
@@ -645,68 +783,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final gaugeColor = overtimeMinutes == 0 ? Colors.blue : (isAhead ? Colors.green : Colors.red);
 
 
-    // Calculate work statistics
-    final workDays = HiveDb.getWorkDays();
-    final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month, 1);
-    final today = DateTime(now.year, now.month, now.day);
-
-    int configuredWorkDays = 0;
-    int workedDays = 0;
-    int offDays = 0;
-    int missedDays = 0;
-    int totalMinutesWorked = 0;
-    int expectedMinutesUntilToday = 0;
-
-    // Calculate expected and actual minutes until today
-    for (var day = monthStart; day.isBefore(today.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
-      final weekdayIndex = day.weekday - 1;
-      final bool isWorkDay = workDays[weekdayIndex];
-      final entry = HiveDb.getDayEntry(day);
-
-      if (isWorkDay) {
-        configuredWorkDays++;
-        expectedMinutesUntilToday += HiveDb.getDailyTargetMinutes();
-        
-        if (entry != null) {
-          if (entry['offDay'] == true) {
-            offDays++;
-            // Add target minutes for off days since they count towards the monthly target
-            totalMinutesWorked += HiveDb.getDailyTargetMinutes();
-          } else if (entry['duration'] != null || entry['in'] != null) {
-            workedDays++;
-            if (entry['duration'] != null) {
-              totalMinutesWorked += (entry['duration'] as num).toInt();
-            } else if (entry['in'] != null && entry['out'] == null) {
-              // For current day if still working
-              final clockInTime = DateTime.parse(entry['in']);
-              final currentDuration = now.difference(clockInTime).inMinutes;
-              totalMinutesWorked += currentDuration;
-            }
-          } else {
-            missedDays++;
-          }
-        } else {
-          missedDays++;
-        }
-      }
-    }
-
-    // Recalculate overtime based on actual minutes worked until today
-    final actualOvertimeMinutes = totalMinutesWorked - expectedMinutesUntilToday;
-    final actualOvertimeHours = actualOvertimeMinutes / 60.0;
-    
-    // Update gauge value with actual overtime
-    gaugeValue = actualOvertimeHours.clamp(-maxGaugeValue, maxGaugeValue);
-    percentage = ((gaugeValue + maxGaugeValue) / (2 * maxGaugeValue)) * 100;
-
-    // Update display values
-    final isActuallyAhead = actualOvertimeMinutes >= 0;
-    final actualDisplayValue = actualOvertimeMinutes == 0 ? '0h 0m' : formatDuration(actualOvertimeMinutes.abs());
-    final actualStatusText = actualOvertimeMinutes == 0 ? 'on schedule' : (isActuallyAhead ? 'ahead of schedule' : 'behind schedule');
-    final actualGaugeColor = actualOvertimeMinutes == 0 ? Colors.blue : (isActuallyAhead ? Colors.green : Colors.red);
-
-
     return Card(
       elevation: 4,
       child: Padding(
@@ -717,24 +793,88 @@ class _SummaryScreenState extends State<SummaryScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Overtime Tracker',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: actualOvertimeMinutes >= 0 ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: actualOvertimeMinutes >= 0 ? Colors.green.withOpacity(0.3) : Colors.red.withOpacity(0.3),
-                    ),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          'Overtime Tracker',
+                          style: Theme.of(context).textTheme.titleLarge,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isCurrentlyClockedIn) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.green.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: const BoxDecoration(
+                                  color: Colors.green,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Text(
+                                'LIVE',
+                                style: TextStyle(
+                                  color: Colors.green,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  child: Text(
-                    actualStatusText,
-                    style: TextStyle(
-                      color: actualOvertimeMinutes >= 0 ? Colors.green : Colors.red,
-                      fontWeight: FontWeight.bold,
+                ),
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: overtimeMinutes >= 0 ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: overtimeMinutes >= 0 ? Colors.green.withOpacity(0.3) : Colors.red.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            statusText,
+                            style: TextStyle(
+                              color: overtimeMinutes >= 0 ? Colors.green : Colors.red,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isCurrentlyClockedIn) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
@@ -780,7 +920,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                       NeedlePointer(
                         value: gaugeValue,
                         needleLength: 0.7,
-                        needleColor: actualGaugeColor,
+                        needleColor: gaugeColor,
                         knobStyle: const KnobStyle(
                           knobRadius: 10,
                           sizeUnit: GaugeSizeUnit.logicalPixel,
@@ -794,7 +934,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                       RangePointer(
                         value: gaugeValue,
                         width: 10,
-                        color: actualGaugeColor,
+                        color: gaugeColor,
                         enableAnimation: true,
                       ),
                     ],
@@ -821,20 +961,33 @@ class _SummaryScreenState extends State<SummaryScreen> {
                           children: [
                             const SizedBox(height: 20),
                             Text(
-                              actualDisplayValue,
+                              displayValue,
                               style: TextStyle(
-                                fontSize: 22,
+                                fontSize: 20,
                                 fontWeight: FontWeight.bold,
-                                color: actualGaugeColor,
+                                color: gaugeColor,
                               ),
+                              textAlign: TextAlign.center,
                             ),
                             Text(
                               '${(totalMinutesWorked / 60).toStringAsFixed(1)}h / ${(expectedMinutesUntilToday / 60).toStringAsFixed(1)}h',
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: 11,
                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
+                              textAlign: TextAlign.center,
                             ),
+                            if (isCurrentlyClockedIn) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Updated ${DateFormat('HH:mm:ss').format(DateTime.now())}',
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                           ],
                         ),
                         positionFactor: 0.9,
@@ -1091,47 +1244,41 @@ class _SummaryScreenState extends State<SummaryScreen> {
   }
 
   Widget _buildWeeklyBarChart() {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _getWeeklyWorkHours(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    // Use synchronous calculation instead of FutureBuilder to avoid constant rebuilding
+    final data = _getWeeklyWorkHoursSync();
+    final List<BarChartGroupData> barGroups = [];
 
-        final data = snapshot.data ?? {};
-        final List<BarChartGroupData> barGroups = [];
+    final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final dailyTarget = HiveDb.getDailyTargetMinutes() / 60;
 
-        final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        final dailyTarget = HiveDb.getDailyTargetMinutes() / 60;
+    // Find the maximum hours worked in a day to set appropriate Y-axis scale
+    double maxHours = dailyTarget;
+    for (int i = 0; i < 7; i++) {
+      final double hours = (data[i.toString()] ?? 0.0) / 60.0;
+      if (hours > maxHours) maxHours = hours;
+    }
+    // Set max Y to either 150% of daily target or 150% of max hours, whichever is greater
+    final maxY = (maxHours > dailyTarget ? maxHours : dailyTarget) * 1.5;
 
-        // Find the maximum hours worked in a day to set appropriate Y-axis scale
-        double maxHours = dailyTarget;
-        for (int i = 0; i < 7; i++) {
-          final double hours = (data[i.toString()] ?? 0.0) / 60.0;
-          if (hours > maxHours) maxHours = hours;
-        }
-        // Set max Y to either 150% of daily target or 150% of max hours, whichever is greater
-        final maxY = (maxHours > dailyTarget ? maxHours : dailyTarget) * 1.5;
+    for (int i = 0; i < 7; i++) {
+      final double hours = (data[i.toString()] ?? 0.0) / 60.0;
 
-        for (int i = 0; i < 7; i++) {
-          final double hours = (data[i.toString()] ?? 0.0) / 60.0;
-
-          barGroups.add(
-            BarChartGroupData(
-              x: i,
-              barRods: [
-                BarChartRodData(
-                  toY: hours,
-                  color: hours >= dailyTarget
-                      ? Colors.green
-                      : (hours > 0 ? AppColors.primaryLight : Colors.grey[300]),
-                  width: 20,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ],
+      barGroups.add(
+        BarChartGroupData(
+          x: i,
+          barRods: [
+            BarChartRodData(
+              toY: hours,
+              color: hours >= dailyTarget
+                  ? Colors.green
+                  : (hours > 0 ? AppColors.primaryLight : Colors.grey[300]),
+              width: 20,
+              borderRadius: BorderRadius.circular(4),
             ),
-          );
-        }
+          ],
+        ),
+      );
+    }
 
         return Card(
           elevation: 4,
@@ -1139,13 +1286,13 @@ class _SummaryScreenState extends State<SummaryScreen> {
             padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
+              children: [
+                Text(
                   'Weekly Work Hours',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
-        Text(
+                Text(
                   'Hours worked each day this week',
                   style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
@@ -1167,9 +1314,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
                                 padding: const EdgeInsets.only(top: 8.0),
                                 child: Text(
                                   weekdays[value.toInt()],
-          style: const TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 12,
-            fontWeight: FontWeight.bold,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               );
@@ -1230,8 +1377,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
             ),
           ),
         );
-      },
-    );
   }
 
   Widget _legendItem(Color color, String label) {
@@ -1251,8 +1396,32 @@ class _SummaryScreenState extends State<SummaryScreen> {
     );
   }
 
-  Future<Map<String, dynamic>> _getWeeklyWorkHours() async {
+  Map<String, dynamic> _getWeeklyWorkHoursSync() {
     final now = DateTime.now();
+    
+    // Check if we have cached data that's still valid
+    if (_cachedWeeklyData != null && _lastWeeklyDataUpdate != null) {
+      final timeSinceLastUpdate = now.difference(_lastWeeklyDataUpdate!);
+      if (timeSinceLastUpdate < _weeklyDataCacheDuration) {
+        // Return cached data, but update today's entry if user is clocked in
+        if (_isCurrentlyClockedIn) {
+          final updatedData = Map<String, dynamic>.from(_cachedWeeklyData!);
+          final todayWeekday = now.weekday - 1;
+          final todayEntry = HiveDb.getDayEntry(now);
+          
+          if (todayEntry != null && todayEntry['in'] != null && todayEntry['out'] == null) {
+            final clockInTime = DateTime.parse(todayEntry['in']);
+            final currentDuration = now.difference(clockInTime).inMinutes;
+            updatedData[todayWeekday.toString()] = currentDuration;
+          }
+          
+          return updatedData;
+        }
+        return _cachedWeeklyData!;
+      }
+    }
+    
+    // Calculate fresh data
     final weekStart = now.subtract(Duration(days: now.weekday - 1));
     final weekEnd = weekStart.add(const Duration(days: 6));
 
@@ -1279,7 +1448,15 @@ class _SummaryScreenState extends State<SummaryScreen> {
       }
     }
 
+    // Cache the data
+    _cachedWeeklyData = weeklyHours;
+    _lastWeeklyDataUpdate = now;
+
     return weeklyHours;
+  }
+
+  Future<Map<String, dynamic>> _getWeeklyWorkHours() async {
+    return _getWeeklyWorkHoursSync();
   }
 
   Widget _buildLastMonthSummaryCard(Map<String, dynamic> summary, String lastMonthName) {
