@@ -6,12 +6,12 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:background="@android:color/white">
 
-    <!-- Main content area -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:padding="@dimen/widget_padding_large">
+            <!-- Main content area -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="16dp">
 
         <!-- Top bar using RelativeLayout for proper alignment -->
         <RelativeLayout
@@ -31,7 +31,7 @@
                 android:gravity="center"
                 android:text="Home Screen"
                 android:textColor="@android:color/black"
-                android:textSize="@dimen/widget_text_size_large_large"
+                android:textSize="16sp"
                 android:textStyle="bold" />
 
             <LinearLayout
@@ -45,7 +45,7 @@
                 <ImageButton
                     android:id="@+id/btn_previous"
                     android:layout_width="0dp"
-                    android:layout_height="40dp"
+                    android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:background="@android:color/transparent"
                     android:src="@drawable/previous_button"
@@ -54,7 +54,7 @@
                 <ImageButton
                     android:id="@+id/btn_next"
                     android:layout_width="0dp"
-                    android:layout_height="40dp"
+                    android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:background="@android:color/transparent"
                     android:src="@drawable/next_button"
@@ -73,8 +73,8 @@
 
                 <ImageButton
                     android:id="@+id/btn_settings"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:src="@drawable/ic_settings"
                     android:background="@android:color/transparent"
                     android:scaleType="centerInside" />
@@ -98,7 +98,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Clock In: --:--"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textColor="@android:color/darker_gray"
                 android:gravity="center"
                 android:layout_marginBottom="4dp"
@@ -110,7 +110,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Clock Out: --:--"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textColor="@android:color/darker_gray"
                 android:gravity="center"
                 android:layout_marginBottom="8dp"
@@ -119,9 +119,9 @@
             <Button
                 android:id="@+id/btn_clock_in_out"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/widget_button_height_large"
+                android:layout_height="wrap_content"
                 android:text="Clock In/Out"
-                android:textSize="@dimen/widget_text_size_large_large"
+                android:textSize="16sp"
                 android:textStyle="bold"
                 android:background="@android:color/holo_blue_dark"
                 android:textColor="@android:color/white"
@@ -155,7 +155,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Remaining: "
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:textColor="@android:color/darker_gray"
                     android:textStyle="bold" />
                 <TextView
@@ -163,7 +163,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="--h --m"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:textColor="@android:color/darker_gray"
                     android:layout_marginStart="4dp" />
             </LinearLayout>
@@ -180,7 +180,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Overtime: "
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:textColor="@android:color/darker_gray"
                     android:textStyle="bold" />
                 <TextView
@@ -188,7 +188,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="--h --m"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:textColor="@android:color/darker_gray"
                     android:layout_marginStart="4dp" />
             </LinearLayout>
@@ -196,8 +196,8 @@
             <!-- Overtime Gauge -->
             <FrameLayout
                 android:id="@+id/overtime_gauge_container"
-                android:layout_width="@dimen/widget_gauge_size_large"
-                android:layout_height="@dimen/widget_gauge_size_large"
+                android:layout_width="160dp"
+                android:layout_height="160dp"
                 android:layout_gravity="center_horizontal"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/gauge_container_background">
@@ -205,8 +205,8 @@
                 <!-- Background Circle with Shadow -->
                 <ImageView
                     android:id="@+id/gauge_background_circle"
-                    android:layout_width="@dimen/widget_gauge_size_large"
-                    android:layout_height="@dimen/widget_gauge_size_large"
+                    android:layout_width="160dp"
+                    android:layout_height="160dp"
                     android:layout_gravity="center"
                     android:src="@drawable/gauge_background_circle"
                     android:scaleType="fitXY" />
@@ -214,8 +214,8 @@
                 <!-- Progress Arc Container -->
                 <FrameLayout
                     android:id="@+id/gauge_progress_container"
-                    android:layout_width="@dimen/widget_gauge_size_large"
-                    android:layout_height="@dimen/widget_gauge_size_large"
+                    android:layout_width="160dp"
+                    android:layout_height="160dp"
                     android:layout_gravity="center">
 
                     <!-- Progress Arc - Gray (default) -->
@@ -263,7 +263,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="0h"
-                        android:textSize="20sp"
+                        android:textSize="16sp"
                         android:textStyle="bold"
                         android:textColor="@android:color/black"
                         android:gravity="center" />
@@ -274,7 +274,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="0h / 0h"
-                        android:textSize="11sp"
+                        android:textSize="10sp"
                         android:textColor="@android:color/darker_gray"
                         android:gravity="center"
                         android:layout_marginTop="2dp" />
@@ -295,7 +295,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Today: "
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:textColor="@android:color/darker_gray"
                     android:textStyle="bold" />
                 <TextView
@@ -303,7 +303,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="$0.00"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:textColor="@android:color/darker_gray"
                     android:layout_marginStart="4dp" />
             </LinearLayout>
@@ -320,7 +320,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Month: "
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:textColor="@android:color/darker_gray"
                     android:textStyle="bold" />
                 <TextView
@@ -328,7 +328,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="$0.00"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:textColor="@android:color/darker_gray"
                     android:layout_marginStart="4dp" />
             </LinearLayout>
@@ -348,7 +348,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="July 2024"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:textStyle="bold"
                     android:textColor="@android:color/black"
                     android:gravity="center"
@@ -361,59 +361,66 @@
                     android:orientation="horizontal"
                     android:gravity="center">
                     <TextView
+                        android:id="@+id/weekday_1"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="M"
-                        android:textSize="10sp"
+                        android:textSize="9sp"
                         android:textColor="@android:color/darker_gray"
                         android:gravity="center" />
                     <TextView
+                        android:id="@+id/weekday_2"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="T"
-                        android:textSize="10sp"
+                        android:textSize="9sp"
                         android:textColor="@android:color/darker_gray"
                         android:gravity="center" />
                     <TextView
+                        android:id="@+id/weekday_3"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="W"
-                        android:textSize="10sp"
+                        android:textSize="9sp"
                         android:textColor="@android:color/darker_gray"
                         android:gravity="center" />
                     <TextView
+                        android:id="@+id/weekday_4"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="T"
-                        android:textSize="10sp"
+                        android:textSize="9sp"
                         android:textColor="@android:color/darker_gray"
                         android:gravity="center" />
                     <TextView
+                        android:id="@+id/weekday_5"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="F"
-                        android:textSize="10sp"
+                        android:textSize="9sp"
                         android:textColor="@android:color/darker_gray"
                         android:gravity="center" />
                     <TextView
+                        android:id="@+id/weekday_6"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="S"
-                        android:textSize="10sp"
+                        android:textSize="9sp"
                         android:textColor="@android:color/darker_gray"
                         android:gravity="center" />
                     <TextView
+                        android:id="@+id/weekday_7"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="S"
-                        android:textSize="10sp"
+                        android:textSize="9sp"
                         android:textColor="@android:color/darker_gray"
                         android:gravity="center" />
                 </LinearLayout>
@@ -426,13 +433,13 @@
                     android:orientation="horizontal"
                     android:gravity="center"
                     android:layout_marginTop="2dp">
-                    <TextView android:id="@+id/day_1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="1" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="2" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="3" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="4" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_5" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="5" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_6" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="6" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_7" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="7" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="1" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="2" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="3" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="4" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_5" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="5" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_6" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="6" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_7" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="7" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
                 </LinearLayout>
 
                 <!-- Calendar Days Row 2 -->
@@ -443,13 +450,13 @@
                     android:orientation="horizontal"
                     android:gravity="center"
                     android:layout_marginTop="2dp">
-                    <TextView android:id="@+id/day_8" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="8" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_9" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="9" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_10" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="10" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_11" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="11" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_12" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="12" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_13" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="13" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_14" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="14" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_8" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="8" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_9" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="9" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_10" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="10" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_11" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="11" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_12" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="12" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_13" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="13" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_14" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="14" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
                 </LinearLayout>
 
                 <!-- Calendar Days Row 3 -->
@@ -460,13 +467,13 @@
                     android:orientation="horizontal"
                     android:gravity="center"
                     android:layout_marginTop="2dp">
-                    <TextView android:id="@+id/day_15" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="15" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_16" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="16" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_17" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="17" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_18" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="18" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_19" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="19" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_20" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="20" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_21" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="21" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_15" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="15" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_16" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="16" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_17" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="17" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_18" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="18" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_19" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="19" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_20" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="20" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_21" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="21" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
                 </LinearLayout>
 
                 <!-- Calendar Days Row 4 -->
@@ -477,13 +484,13 @@
                     android:orientation="horizontal"
                     android:gravity="center"
                     android:layout_marginTop="2dp">
-                    <TextView android:id="@+id/day_22" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="22" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_23" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="23" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_24" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="24" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_25" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="25" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_26" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="26" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_27" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="27" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_28" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="28" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_22" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="22" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_23" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="23" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_24" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="24" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_25" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="25" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_26" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="26" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_27" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="27" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_28" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="28" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
                 </LinearLayout>
 
                 <!-- Calendar Days Row 5 -->
@@ -494,13 +501,13 @@
                     android:orientation="horizontal"
                     android:gravity="center"
                     android:layout_marginTop="2dp">
-                    <TextView android:id="@+id/day_29" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="29" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_30" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="30" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_31" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="31" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_32" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_33" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_34" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_35" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_29" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="29" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_30" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="30" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_31" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="31" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_32" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_33" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_34" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_35" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
                 </LinearLayout>
 
                 <!-- Calendar Days Row 6 -->
@@ -511,13 +518,13 @@
                     android:orientation="horizontal"
                     android:gravity="center"
                     android:layout_marginTop="2dp">
-                    <TextView android:id="@+id/day_36" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_37" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_38" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_39" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_40" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_41" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
-                    <TextView android:id="@+id/day_42" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="13.5sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_36" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_37" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_38" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_39" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_40" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_41" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
+                    <TextView android:id="@+id/day_42" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="" android:textSize="11sp" android:gravity="center" android:lineSpacingExtra="2dp" />
                 </LinearLayout>
 
             </LinearLayout>
@@ -538,7 +545,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Transparency: 100%"
-                android:textSize="14sp"
+                android:textSize="13sp"
                 android:textStyle="bold"
                 android:gravity="center"
                 android:layout_marginBottom="8dp" />
@@ -552,34 +559,34 @@
 
                 <Button
                     android:id="@+id/btn_transparency_25"
-                    android:layout_width="60dp"
-                    android:layout_height="40dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:text="25%"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:layout_margin="4dp" />
 
                 <Button
                     android:id="@+id/btn_transparency_50"
-                    android:layout_width="60dp"
-                    android:layout_height="40dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:text="50%"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:layout_margin="4dp" />
 
                 <Button
                     android:id="@+id/btn_transparency_75"
-                    android:layout_width="60dp"
-                    android:layout_height="40dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:text="75%"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:layout_margin="4dp" />
 
                 <Button
                     android:id="@+id/btn_transparency_100"
-                    android:layout_width="60dp"
-                    android:layout_height="40dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:text="100%"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:layout_margin="4dp" />
 
             </LinearLayout>
@@ -589,7 +596,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Background Color"
-                android:textSize="14sp"
+                android:textSize="13sp"
                 android:textStyle="bold"
                 android:gravity="center"
                 android:layout_marginBottom="8dp" />
@@ -602,29 +609,29 @@
 
                 <Button
                     android:id="@+id/btn_color_white"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:background="@android:color/white"
                     android:layout_margin="4dp" />
 
                 <Button
                     android:id="@+id/btn_color_black"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:background="@android:color/black"
                     android:layout_margin="4dp" />
 
                 <Button
                     android:id="@+id/btn_color_blue"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:background="@android:color/holo_blue_dark"
                     android:layout_margin="4dp" />
 
                 <Button
                     android:id="@+id/btn_color_green"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:background="@android:color/holo_green_dark"
                     android:layout_margin="4dp" />
 

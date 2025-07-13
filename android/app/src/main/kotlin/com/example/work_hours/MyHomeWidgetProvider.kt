@@ -11,6 +11,7 @@ import android.net.Uri
 import android.widget.RemoteViews
 import android.widget.Toast
 import android.util.Log
+import android.util.TypedValue
 import com.example.work_hours.R
 import es.antonborri.home_widget.HomeWidgetBackgroundReceiver
 import es.antonborri.home_widget.HomeWidgetPlugin
@@ -42,11 +43,30 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         
         // Settings constants
         private const val SETTINGS_PAGE = -1
+        
+        // Widget size thresholds (in dp)
+        private const val SMALL_WIDGET_THRESHOLD = 100
+        private const val MEDIUM_WIDGET_THRESHOLD = 150
+        private const val LARGE_WIDGET_THRESHOLD = 200
     }
+    
+    // Widget size data class
+    data class WidgetSize(
+        val width: Int,
+        val height: Int,
+        val isSmall: Boolean,
+        val isMedium: Boolean,
+        val isLarge: Boolean,
+        val isExtraLarge: Boolean
+    )
     
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_layout)
+            
+            // Get widget size and calculate responsive dimensions
+            val widgetSize = getWidgetSize(context, appWidgetManager, appWidgetId)
+            applyResponsiveSizing(context, views, widgetSize)
             
             // Apply widget settings (transparency and background color)
             applyWidgetSettings(context, views)
@@ -57,7 +77,7 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
             // Check if we're in settings mode
             if (isInSettingsMode(context)) {
                 // Show only settings page
-                showSettingsPage(context, views)
+                showSettingsPage(context, views, widgetSize)
                 // Hide home screen content
                 views.setViewVisibility(R.id.home_screen_content, android.view.View.GONE)
             } else {
@@ -71,22 +91,22 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
                     TAB_HOME_SCREEN -> {
                         // Ensure home screen content is visible
                         views.setViewVisibility(R.id.home_screen_content, android.view.View.VISIBLE)
-                        showHomeScreenContent(context, views)
+                        showHomeScreenContent(context, views, widgetSize)
                     }
                     TAB_HISTORY -> {
                         // Show history content
                         views.setViewVisibility(R.id.home_screen_content, android.view.View.VISIBLE)
-                        showHistoryTabContent(context, views)
+                        showHistoryTabContent(context, views, widgetSize)
                     }
                     TAB_SUMMARY -> {
                         // Show summary content
                         views.setViewVisibility(R.id.home_screen_content, android.view.View.VISIBLE)
-                        showSummaryTabContent(context, views)
+                        showSummaryTabContent(context, views, widgetSize)
                     }
                     TAB_SALARY -> {
                         // Show salary content
                         views.setViewVisibility(R.id.home_screen_content, android.view.View.VISIBLE)
-                        showSalaryTabContent(context, views)
+                        showSalaryTabContent(context, views, widgetSize)
                     }
                     else -> {
                         showEmptyTabContent(views)
@@ -99,6 +119,126 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
+    }
+
+    /**
+     * Get the actual widget size and determine size category
+     */
+    private fun getWidgetSize(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int): WidgetSize {
+        val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+        val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+        val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+        
+        // Convert from density-independent pixels to dp
+        val density = context.resources.displayMetrics.density
+        val widthDp = (minWidth / density).toInt()
+        val heightDp = (minHeight / density).toInt()
+        
+        // Determine size category based on the smaller dimension
+        val smallerDimension = minOf(widthDp, heightDp)
+        
+        val isSmall = smallerDimension < SMALL_WIDGET_THRESHOLD
+        val isMedium = smallerDimension >= SMALL_WIDGET_THRESHOLD && smallerDimension < MEDIUM_WIDGET_THRESHOLD
+        val isLarge = smallerDimension >= MEDIUM_WIDGET_THRESHOLD && smallerDimension < LARGE_WIDGET_THRESHOLD
+        val isExtraLarge = smallerDimension >= LARGE_WIDGET_THRESHOLD
+        
+        Log.d(TAG, "[responsive] Widget size: ${widthDp}x${heightDp}dp, category: ${if (isSmall) "small" else if (isMedium) "medium" else if (isLarge) "large" else "extra-large"}")
+        
+        return WidgetSize(widthDp, heightDp, isSmall, isMedium, isLarge, isExtraLarge)
+    }
+    
+    /**
+     * Apply responsive sizing to all UI elements based on widget size
+     */
+    private fun applyResponsiveSizing(context: Context, views: RemoteViews, widgetSize: WidgetSize) {
+        val sizing = getResponsiveSizing(widgetSize)
+        
+        // Apply text sizes
+        views.setTextViewTextSize(R.id.tv_page_title, TypedValue.COMPLEX_UNIT_SP, sizing.titleTextSize)
+        views.setTextViewTextSize(R.id.tv_clock_in_time, TypedValue.COMPLEX_UNIT_SP, sizing.bodyTextSize)
+        views.setTextViewTextSize(R.id.tv_clock_out_time, TypedValue.COMPLEX_UNIT_SP, sizing.bodyTextSize)
+        views.setTextViewTextSize(R.id.btn_clock_in_out, TypedValue.COMPLEX_UNIT_SP, sizing.buttonTextSize)
+        views.setTextViewTextSize(R.id.tv_loading_label, TypedValue.COMPLEX_UNIT_SP, sizing.bodyTextSize)
+        views.setTextViewTextSize(R.id.tv_remaining_label, TypedValue.COMPLEX_UNIT_SP, sizing.bodyTextSize)
+        views.setTextViewTextSize(R.id.tv_remaining_value, TypedValue.COMPLEX_UNIT_SP, sizing.bodyTextSize)
+        views.setTextViewTextSize(R.id.tv_overtime_label, TypedValue.COMPLEX_UNIT_SP, sizing.bodyTextSize)
+        views.setTextViewTextSize(R.id.tv_overtime_value, TypedValue.COMPLEX_UNIT_SP, sizing.bodyTextSize)
+        views.setTextViewTextSize(R.id.tv_today_earnings_label, TypedValue.COMPLEX_UNIT_SP, sizing.bodyTextSize)
+        views.setTextViewTextSize(R.id.tv_today_earnings_value, TypedValue.COMPLEX_UNIT_SP, sizing.bodyTextSize)
+        views.setTextViewTextSize(R.id.tv_monthly_earnings_label, TypedValue.COMPLEX_UNIT_SP, sizing.bodyTextSize)
+        views.setTextViewTextSize(R.id.tv_monthly_earnings_value, TypedValue.COMPLEX_UNIT_SP, sizing.bodyTextSize)
+        views.setTextViewTextSize(R.id.tv_calendar_header, TypedValue.COMPLEX_UNIT_SP, sizing.subtitleTextSize)
+        views.setTextViewTextSize(R.id.gauge_main_value, TypedValue.COMPLEX_UNIT_SP, sizing.gaugeMainTextSize)
+        views.setTextViewTextSize(R.id.gauge_progress_text, TypedValue.COMPLEX_UNIT_SP, sizing.gaugeSubTextSize)
+        
+        // Apply calendar day text sizes
+        for (i in 1..42) {
+            val dayId = context.resources.getIdentifier("day_$i", "id", context.packageName)
+            if (dayId != 0) {
+                views.setTextViewTextSize(dayId, TypedValue.COMPLEX_UNIT_SP, sizing.calendarTextSize)
+            }
+        }
+        
+        // Apply weekday header text sizes
+        val weekdays = arrayOf("M", "T", "W", "T", "F", "S", "S")
+        for (i in weekdays.indices) {
+            val weekdayId = context.resources.getIdentifier("weekday_${i+1}", "id", context.packageName)
+            if (weekdayId != 0) {
+                views.setTextViewTextSize(weekdayId, TypedValue.COMPLEX_UNIT_SP, sizing.calendarTextSize)
+            }
+        }
+        
+        // Apply settings text sizes
+        views.setTextViewTextSize(R.id.tv_transparency_label, TypedValue.COMPLEX_UNIT_SP, sizing.subtitleTextSize)
+        
+        // Apply button heights
+        views.setInt(R.id.btn_clock_in_out, "setMinHeight", sizing.buttonHeight)
+        views.setInt(R.id.btn_clock_in_out, "setMaxHeight", sizing.buttonHeight)
+        
+        // Apply navigation button sizes
+        views.setInt(R.id.btn_previous, "setMinHeight", sizing.navButtonSize)
+        views.setInt(R.id.btn_previous, "setMaxHeight", sizing.navButtonSize)
+        views.setInt(R.id.btn_next, "setMinHeight", sizing.navButtonSize)
+        views.setInt(R.id.btn_next, "setMaxHeight", sizing.navButtonSize)
+        views.setInt(R.id.btn_settings, "setMinHeight", sizing.navButtonSize)
+        views.setInt(R.id.btn_settings, "setMaxHeight", sizing.navButtonSize)
+        views.setInt(R.id.btn_settings, "setMinWidth", sizing.navButtonSize)
+        views.setInt(R.id.btn_settings, "setMaxWidth", sizing.navButtonSize)
+        
+        // Apply gauge size
+        views.setInt(R.id.overtime_gauge_container, "setMinWidth", sizing.gaugeSize)
+        views.setInt(R.id.overtime_gauge_container, "setMaxWidth", sizing.gaugeSize)
+        views.setInt(R.id.overtime_gauge_container, "setMinHeight", sizing.gaugeSize)
+        views.setInt(R.id.overtime_gauge_container, "setMaxHeight", sizing.gaugeSize)
+        
+        // Apply gauge background and progress sizes
+        views.setInt(R.id.gauge_background_circle, "setMinWidth", sizing.gaugeSize)
+        views.setInt(R.id.gauge_background_circle, "setMaxWidth", sizing.gaugeSize)
+        views.setInt(R.id.gauge_background_circle, "setMinHeight", sizing.gaugeSize)
+        views.setInt(R.id.gauge_background_circle, "setMaxHeight", sizing.gaugeSize)
+        
+        views.setInt(R.id.gauge_progress_container, "setMinWidth", sizing.gaugeSize)
+        views.setInt(R.id.gauge_progress_container, "setMaxWidth", sizing.gaugeSize)
+        views.setInt(R.id.gauge_progress_container, "setMinHeight", sizing.gaugeSize)
+        views.setInt(R.id.gauge_progress_container, "setMaxHeight", sizing.gaugeSize)
+        
+        // Apply settings button sizes
+        val settingsButtons = arrayOf(
+            R.id.btn_transparency_25, R.id.btn_transparency_50, 
+            R.id.btn_transparency_75, R.id.btn_transparency_100,
+            R.id.btn_color_white, R.id.btn_color_black, 
+            R.id.btn_color_blue, R.id.btn_color_green
+        )
+        
+        for (buttonId in settingsButtons) {
+            views.setInt(buttonId, "setMinHeight", sizing.settingsButtonSize)
+            views.setInt(buttonId, "setMaxHeight", sizing.settingsButtonSize)
+            views.setInt(buttonId, "setMinWidth", sizing.settingsButtonSize)
+            views.setInt(buttonId, "setMaxWidth", sizing.settingsButtonSize)
+            views.setTextViewTextSize(buttonId, TypedValue.COMPLEX_UNIT_SP, sizing.settingsButtonTextSize)
+        }
+        
+        Log.d(TAG, "[responsive] Applied sizing: title=${sizing.titleTextSize}sp, body=${sizing.bodyTextSize}sp, gauge=${sizing.gaugeSize}dp")
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -243,7 +383,7 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         }
     }
     
-    private fun showHomeScreenContent(context: Context, views: RemoteViews) {
+    private fun showHomeScreenContent(context: Context, views: RemoteViews, widgetSize: WidgetSize) {
         // Show clock in/out time labels
         updateClockTimeLabels(context, views)
         
@@ -290,7 +430,7 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.mini_calendar_container, android.view.View.GONE)
     }
 
-    private fun showHistoryTabContent(context: Context, views: RemoteViews) {
+    private fun showHistoryTabContent(context: Context, views: RemoteViews, widgetSize: WidgetSize) {
         // Hide clock in/out time labels and button
         views.setViewVisibility(R.id.tv_clock_in_time, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_clock_out_time, android.view.View.GONE)
@@ -318,7 +458,7 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         populateMiniCalendar(context, views)
     }
     
-    private fun showSummaryTabContent(context: Context, views: RemoteViews) {
+    private fun showSummaryTabContent(context: Context, views: RemoteViews, widgetSize: WidgetSize) {
         // Hide clock in/out time labels and button
         views.setViewVisibility(R.id.tv_clock_in_time, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_clock_out_time, android.view.View.GONE)
@@ -451,7 +591,7 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         }
     }
     
-    private fun showSalaryTabContent(context: Context, views: RemoteViews) {
+    private fun showSalaryTabContent(context: Context, views: RemoteViews, widgetSize: WidgetSize) {
         // Hide clock in/out time labels and button
         views.setViewVisibility(R.id.tv_clock_in_time, android.view.View.GONE)
         views.setViewVisibility(R.id.tv_clock_out_time, android.view.View.GONE)
@@ -571,7 +711,7 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         prefs.edit().putString("backgroundColor", color).apply()
     }
     
-    private fun showSettingsPage(context: Context, views: RemoteViews) {
+    private fun showSettingsPage(context: Context, views: RemoteViews, widgetSize: WidgetSize) {
         // Update page title
         views.setTextViewText(R.id.tv_page_title, "Settings")
         
@@ -590,11 +730,11 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setTextViewText(R.id.tv_transparency_label, "Transparency: $transparency%")
         
         // Setup transparency and color buttons
-        setupTransparencyButtons(context, views)
-        setupColorButtons(context, views)
+        setupTransparencyButtons(context, views, widgetSize)
+        setupColorButtons(context, views, widgetSize)
     }
     
-    private fun setupTransparencyButtons(context: Context, views: RemoteViews) {
+    private fun setupTransparencyButtons(context: Context, views: RemoteViews, widgetSize: WidgetSize) {
         // 25% transparency button
         val transparency25Intent = Intent(context, MyHomeWidgetProvider::class.java).apply {
             action = ACTION_TRANSPARENCY_CHANGE
@@ -628,7 +768,7 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
         views.setOnClickPendingIntent(R.id.btn_transparency_100, transparency100PendingIntent)
     }
     
-    private fun setupColorButtons(context: Context, views: RemoteViews) {
+    private fun setupColorButtons(context: Context, views: RemoteViews, widgetSize: WidgetSize) {
         // White color button
         val whiteIntent = Intent(context, MyHomeWidgetProvider::class.java).apply {
             action = ACTION_COLOR_CHANGE
@@ -845,4 +985,86 @@ class MyHomeWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(dayId, "")
         }
     }
+    
+    /**
+     * Get responsive sizing configuration based on widget size
+     */
+    private fun getResponsiveSizing(widgetSize: WidgetSize): ResponsiveSizing {
+        return when {
+            widgetSize.isSmall -> ResponsiveSizing(
+                titleTextSize = 12f,
+                subtitleTextSize = 11f,
+                bodyTextSize = 10f,
+                buttonTextSize = 11f,
+                settingsButtonTextSize = 9f,
+                gaugeMainTextSize = 12f,
+                gaugeSubTextSize = 9f,
+                calendarTextSize = 9f,
+                buttonHeight = 32,
+                navButtonSize = 28,
+                settingsButtonSize = 28,
+                gaugeSize = 120
+            )
+            widgetSize.isMedium -> ResponsiveSizing(
+                titleTextSize = 14f,
+                subtitleTextSize = 13f,
+                bodyTextSize = 12f,
+                buttonTextSize = 13f,
+                settingsButtonTextSize = 10f,
+                gaugeMainTextSize = 14f,
+                gaugeSubTextSize = 10f,
+                calendarTextSize = 10f,
+                buttonHeight = 36,
+                navButtonSize = 32,
+                settingsButtonSize = 32,
+                gaugeSize = 140
+            )
+            widgetSize.isLarge -> ResponsiveSizing(
+                titleTextSize = 16f,
+                subtitleTextSize = 15f,
+                bodyTextSize = 14f,
+                buttonTextSize = 15f,
+                settingsButtonTextSize = 12f,
+                gaugeMainTextSize = 16f,
+                gaugeSubTextSize = 12f,
+                calendarTextSize = 12f,
+                buttonHeight = 40,
+                navButtonSize = 36,
+                settingsButtonSize = 36,
+                gaugeSize = 160
+            )
+            else -> ResponsiveSizing( // Extra large
+                titleTextSize = 18f,
+                subtitleTextSize = 17f,
+                bodyTextSize = 16f,
+                buttonTextSize = 17f,
+                settingsButtonTextSize = 14f,
+                gaugeMainTextSize = 18f,
+                gaugeSubTextSize = 14f,
+                calendarTextSize = 14f,
+                buttonHeight = 44,
+                navButtonSize = 40,
+                settingsButtonSize = 40,
+                gaugeSize = 180
+            )
+        }
+    }
+    
+    /**
+     * Data class for responsive sizing configuration
+     */
+    data class ResponsiveSizing(
+        val titleTextSize: Float,
+        val subtitleTextSize: Float,
+        val bodyTextSize: Float,
+        val buttonTextSize: Float,
+        val settingsButtonTextSize: Float,
+        val gaugeMainTextSize: Float,
+        val gaugeSubTextSize: Float,
+        val calendarTextSize: Float,
+        val buttonHeight: Int,
+        val navButtonSize: Int,
+        val settingsButtonSize: Int,
+        val gaugeSize: Int
+    )
 } 
