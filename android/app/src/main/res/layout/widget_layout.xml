@@ -11,7 +11,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="@dimen/widget_padding_large">
 
         <!-- Top bar using RelativeLayout for proper alignment -->
         <RelativeLayout
@@ -31,7 +31,7 @@
                 android:gravity="center"
                 android:text="Home Screen"
                 android:textColor="@android:color/black"
-                android:textSize="16sp"
+                android:textSize="@dimen/widget_text_size_large_large"
                 android:textStyle="bold" />
 
             <LinearLayout
@@ -119,9 +119,9 @@
             <Button
                 android:id="@+id/btn_clock_in_out"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="@dimen/widget_button_height_large"
                 android:text="Clock In/Out"
-                android:textSize="16sp"
+                android:textSize="@dimen/widget_text_size_large_large"
                 android:textStyle="bold"
                 android:background="@android:color/holo_blue_dark"
                 android:textColor="@android:color/white"
@@ -196,8 +196,8 @@
             <!-- Overtime Gauge -->
             <FrameLayout
                 android:id="@+id/overtime_gauge_container"
-                android:layout_width="160dp"
-                android:layout_height="160dp"
+                android:layout_width="@dimen/widget_gauge_size_large"
+                android:layout_height="@dimen/widget_gauge_size_large"
                 android:layout_gravity="center_horizontal"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/gauge_container_background">
@@ -205,8 +205,8 @@
                 <!-- Background Circle with Shadow -->
                 <ImageView
                     android:id="@+id/gauge_background_circle"
-                    android:layout_width="140dp"
-                    android:layout_height="140dp"
+                    android:layout_width="@dimen/widget_gauge_size_large"
+                    android:layout_height="@dimen/widget_gauge_size_large"
                     android:layout_gravity="center"
                     android:src="@drawable/gauge_background_circle"
                     android:scaleType="fitXY" />
@@ -214,8 +214,8 @@
                 <!-- Progress Arc Container -->
                 <FrameLayout
                     android:id="@+id/gauge_progress_container"
-                    android:layout_width="140dp"
-                    android:layout_height="140dp"
+                    android:layout_width="@dimen/widget_gauge_size_large"
+                    android:layout_height="@dimen/widget_gauge_size_large"
                     android:layout_gravity="center">
 
                     <!-- Progress Arc - Gray (default) -->

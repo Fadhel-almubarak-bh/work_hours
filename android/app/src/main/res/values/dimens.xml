@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base dimensions for small widgets -->
+    <dimen name="widget_padding_small">8dp</dimen>
+    <dimen name="widget_text_size_small">10sp</dimen>
+    <dimen name="widget_text_size_medium_small">12sp</dimen>
+    <dimen name="widget_text_size_large_small">14sp</dimen>
+    <dimen name="widget_button_height_small">32dp</dimen>
+    <dimen name="widget_gauge_size_small">120dp</dimen>
+    <dimen name="widget_calendar_text_size_small">10sp</dimen>
+    
+    <!-- Medium dimensions for medium widgets -->
+    <dimen name="widget_padding_medium">12dp</dimen>
+    <dimen name="widget_text_size_medium">12sp</dimen>
+    <dimen name="widget_text_size_medium_medium">14sp</dimen>
+    <dimen name="widget_text_size_large_medium">16sp</dimen>
+    <dimen name="widget_button_height_medium">36dp</dimen>
+    <dimen name="widget_gauge_size_medium">140dp</dimen>
+    <dimen name="widget_calendar_text_size_medium">11sp</dimen>
+    
+    <!-- Large dimensions for large widgets -->
+    <dimen name="widget_padding_large">16dp</dimen>
+    <dimen name="widget_text_size_large">14sp</dimen>
+    <dimen name="widget_text_size_medium_large">16sp</dimen>
+    <dimen name="widget_text_size_large_large">18sp</dimen>
+    <dimen name="widget_button_height_large">40dp</dimen>
+    <dimen name="widget_gauge_size_large">160dp</dimen>
+    <dimen name="widget_calendar_text_size_large">13sp</dimen>
+    
+    <!-- Extra large dimensions for extra large widgets -->
+    <dimen name="widget_padding_xlarge">20dp</dimen>
+    <dimen name="widget_text_size_xlarge">16sp</dimen>
+    <dimen name="widget_text_size_medium_xlarge">18sp</dimen>
+    <dimen name="widget_text_size_large_xlarge">20sp</dimen>
+    <dimen name="widget_button_height_xlarge">44dp</dimen>
+    <dimen name="widget_gauge_size_xlarge">180dp</dimen>
+    <dimen name="widget_calendar_text_size_xlarge">15sp</dimen>
+</resources>
