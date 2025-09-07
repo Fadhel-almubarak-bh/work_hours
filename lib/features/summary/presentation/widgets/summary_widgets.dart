@@ -461,3 +461,135 @@ class MonthlySummaryCard extends StatelessWidget {
     );
   }
 }
+
+class SickLeavesWidget extends StatelessWidget {
+  const SickLeavesWidget({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final currentYear = DateTime.now().year;
+    final sickLeavesCount = HiveDb.getSickLeavesThisYear();
+    
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDarkMode ? Colors.white : Colors.black;
+    final subTextColor = isDarkMode ? Colors.white70 : Colors.grey[600];
+
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.sick_outlined,
+                      color: Colors.orange,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Sick Leaves This Year',
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: sickLeavesCount > 0 
+                        ? Colors.orange.withOpacity(0.1)
+                        : Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: sickLeavesCount > 0 
+                          ? Colors.orange.withOpacity(0.3)
+                          : Colors.green.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Text(
+                    '$sickLeavesCount',
+                    style: TextStyle(
+                      color: sickLeavesCount > 0 ? Colors.orange : Colors.green,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDarkMode 
+                    ? Colors.grey[800]!.withOpacity(0.5) 
+                    : Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Year: $currentYear',
+                    style: TextStyle(
+                      color: subTextColor,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    sickLeavesCount == 0 
+                        ? 'No sick leaves taken this year'
+                        : sickLeavesCount == 1 
+                            ? '1 sick leave taken this year'
+                            : '$sickLeavesCount sick leaves taken this year',
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (sickLeavesCount > 0) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          color: Colors.orange,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Sick leaves are tracked as off days with "sick" in the description',
+                            style: TextStyle(
+                              color: subTextColor,
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
