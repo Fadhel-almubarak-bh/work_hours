@@ -1423,4 +1423,61 @@ class HiveDb {
     }
   }
 
+  // Get count of sick leaves for the current year
+  static int getSickLeavesThisYear() {
+    try {
+      final now = DateTime.now();
+      final yearStart = DateTime(now.year, 1, 1);
+      final yearEnd = DateTime(now.year, 12, 31);
+      
+      final allEntries = getAllEntries();
+      int sickLeaveCount = 0;
+      
+      for (var day = yearStart; day.isBefore(yearEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+        final dateKey = DateFormat('yyyy-MM-dd').format(day);
+        final entry = allEntries[dateKey];
+        
+        if (entry != null && entry['offDay'] == true) {
+          final description = entry['description'] as String?;
+          if (description != null && description.toLowerCase().contains('sick')) {
+            sickLeaveCount++;
+          }
+        }
+      }
+      
+      return sickLeaveCount;
+    } catch (e) {
+      debugPrint('Error getting sick leaves count: $e');
+      return 0;
+    }
+  }
+
+  // Get count of sick leaves for a specific year
+  static int getSickLeavesForYear(int year) {
+    try {
+      final yearStart = DateTime(year, 1, 1);
+      final yearEnd = DateTime(year, 12, 31);
+      
+      final allEntries = getAllEntries();
+      int sickLeaveCount = 0;
+      
+      for (var day = yearStart; day.isBefore(yearEnd.add(const Duration(days: 1))); day = day.add(const Duration(days: 1))) {
+        final dateKey = DateFormat('yyyy-MM-dd').format(day);
+        final entry = allEntries[dateKey];
+        
+        if (entry != null && entry['offDay'] == true) {
+          final description = entry['description'] as String?;
+          if (description != null && description.toLowerCase().contains('sick')) {
+            sickLeaveCount++;
+          }
+        }
+      }
+      
+      return sickLeaveCount;
+    } catch (e) {
+      debugPrint('Error getting sick leaves count for year $year: $e');
+      return 0;
+    }
+  }
+
 }

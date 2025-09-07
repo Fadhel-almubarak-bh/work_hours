@@ -10,6 +10,7 @@ import '../../../../data/repositories/work_hours_repository.dart';
 import '../../summary_controller.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../widgets/summary_widgets.dart';
 
 // Data model for chart
 class WorkHoursData {
@@ -381,6 +382,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                           _buildWeeklyBarChart(),
                           const SizedBox(height: 24),
                           _buildLastMonthSummaryCard(summary, lastMonthName),
+                          const SizedBox(height: 24),
+                          const SickLeavesWidget(),
                         ],
                       ),
                     ),
